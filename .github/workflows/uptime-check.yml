@@ -203,11 +203,11 @@ jobs:
   linnupeletaja-https:
     runs-on: ubuntu-latest
     steps:
-      - name: Check linnupeletaja.ee HTTPS
+      - name: Check linnupeletaja.ee HTTP
         id: check
         run: |
-          status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 https://linnupeletaja.ee)
-          echo "linnupeletaja.ee HTTPS: $status"
+          status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 http://linnupeletaja.ee)
+          echo "linnupeletaja.ee HTTP: $status"
           echo "status=$status" >> $GITHUB_OUTPUT
           [ "$status" = "200" ] || exit 1
       - name: Send alert email
