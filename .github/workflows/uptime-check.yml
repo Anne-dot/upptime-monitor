@@ -6,38 +6,96 @@ on:
   workflow_dispatch:
 
 jobs:
-  nirgu:
+  nirgu-https:
     runs-on: ubuntu-latest
     steps:
-      - name: Check nirgu.ee
+      - name: Check nirgu.ee HTTPS
         run: |
           status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 https://nirgu.ee)
-          echo "nirgu.ee: $status"
+          echo "nirgu.ee HTTPS: $status"
           [ "$status" = "200" ] || exit 1
 
-  birdbusters:
+  nirgu-ssl:
     runs-on: ubuntu-latest
     steps:
-      - name: Check birdbusters.eu
+      - name: Check nirgu.ee SSL
+        run: |
+          echo | openssl s_client -connect nirgu.ee:443 -servername nirgu.ee 2>/dev/null | openssl x509 -noout -dates
+          expiry=$(echo | openssl s_client -connect nirgu.ee:443 -servername nirgu.ee 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
+          expiry_epoch=$(date -d "$expiry" +%s)
+          now_epoch=$(date +%s)
+          days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
+          echo "nirgu.ee SSL expires in $days_left days"
+          [ $days_left -gt 7 ] || exit 1
+
+  birdbusters-https:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check birdbusters.eu HTTPS
         run: |
           status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 https://birdbusters.eu)
-          echo "birdbusters.eu: $status"
+          echo "birdbusters.eu HTTPS: $status"
           [ "$status" = "200" ] || exit 1
 
-  sharpy:
+  birdbusters-ssl:
     runs-on: ubuntu-latest
     steps:
-      - name: Check sharpy.ee
+      - name: Check birdbusters.eu SSL
+        run: |
+          echo | openssl s_client -connect birdbusters.eu:443 -servername birdbusters.eu 2>/dev/null | openssl x509 -noout -dates
+          expiry=$(echo | openssl s_client -connect birdbusters.eu:443 -servername birdbusters.eu 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
+          expiry_epoch=$(date -d "$expiry" +%s)
+          now_epoch=$(date +%s)
+          days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
+          echo "birdbusters.eu SSL expires in $days_left days"
+          [ $days_left -gt 7 ] || exit 1
+
+  sharpy-https:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check sharpy.ee HTTPS
         run: |
           status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 https://sharpy.ee)
-          echo "sharpy.ee: $status"
+          echo "sharpy.ee HTTPS: $status"
           [ "$status" = "200" ] || exit 1
 
-  linnupeletaja:
+  sharpy-ssl:
     runs-on: ubuntu-latest
     steps:
-      - name: Check linnupeletaja.ee
+      - name: Check sharpy.ee SSL
+        run: |
+          echo | openssl s_client -connect sharpy.ee:443 -servername sharpy.ee 2>/dev/null | openssl x509 -noout -dates
+          expiry=$(echo | openssl s_client -connect sharpy.ee:443 -servername sharpy.ee 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
+          expiry_epoch=$(date -d "$expiry" +%s)
+          now_epoch=$(date +%s)
+          days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
+          echo "sharpy.ee SSL expires in $days_left days"
+          [ $days_left -gt 7 ] || exit 1
+
+  linnupeletaja-https:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check linnupeletaja.ee HTTPS
         run: |
           status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 -k https://linnupeletaja.ee)
-          echo "linnupeletaja.ee: $status"
+          echo "linnupeletaja.ee HTTPS: $status (SSL check separate)"
           [ "$status" = "200" ] || exit 1
+
+  linnupeletaja-ssl:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Check linnupeletaja.ee SSL
+        run: |
+          echo "⚠️ linnupeletaja.ee SSL has known issues"
+          if echo | openssl s_client -connect linnupeletaja.ee:443 -servername linnupeletaja.ee 2>/dev/null | openssl x509 -noout -dates; then
+            expiry=$(echo | openssl s_client -connect linnupeletaja.ee:443 -servername linnupeletaja.ee 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
+            expiry_epoch=$(date -d "$expiry" +%s)
+            now_epoch=$(date +%s)
+            days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
+            echo "linnupeletaja.ee SSL expires in $days_left days"
+            [ $days_left -gt 7 ] || exit 1
+          else
+            echo "SSL certificate check failed - certificate may be invalid"
+            exit 1
+          fi
