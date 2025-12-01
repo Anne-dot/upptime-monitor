@@ -10,7 +10,7 @@ on:
 # ============================================
 env:
   # true = ainult test email, false = kõik saajad
-  TEST_MODE: "true"
+  TEST_MODE: "false"
 
   # Tech support email (saab kõik teavitused)
   TECH_EMAIL: "ruusmann@gmail.com"
@@ -206,7 +206,7 @@ jobs:
       - name: Check linnupeletaja.ee HTTPS
         id: check
         run: |
-          status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 -k https://linnupeletaja.ee)
+          status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 https://linnupeletaja.ee)
           echo "linnupeletaja.ee HTTPS: $status"
           echo "status=$status" >> $GITHUB_OUTPUT
           [ "$status" = "200" ] || exit 1
@@ -230,7 +230,6 @@ jobs:
 
   linnupeletaja-ssl:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - name: Check linnupeletaja.ee SSL
         id: check

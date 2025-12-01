@@ -9,7 +9,7 @@ on:
 # SEADISTUS
 # ============================================
 env:
-  TEST_MODE: "true"
+  TEST_MODE: "false"
   TECH_EMAIL: "ruusmann@gmail.com"
 # ============================================
 
@@ -75,7 +75,7 @@ jobs:
           check_site "nirgu.ee" "false"
           check_site "birdbusters.eu" "false"
           check_site "sharpy.ee" "false"
-          check_site "linnupeletaja.ee" "true"
+          check_site "linnupeletaja.ee" "false"
 
           echo "" >> summary.txt
           if [ "$all_ok" = true ]; then
