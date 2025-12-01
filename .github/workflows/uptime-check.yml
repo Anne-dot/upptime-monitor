@@ -10,15 +10,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check nirgu.ee HTTPS
+        id: check
         run: |
           status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 https://nirgu.ee)
           echo "nirgu.ee HTTPS: $status"
+          echo "status=$status" >> $GITHUB_OUTPUT
           [ "$status" = "200" ] || exit 1
+      - name: Send alert email
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "⚠️ nirgu.ee HTTPS probleem"
+          to: info@nirgu.ee,ruusmann@gmail.com
+          from: Veebilehtede seire
+          body: |
+            nirgu.ee ei vasta või tagastas vea.
+
+            HTTP staatus: ${{ steps.check.outputs.status }}
+            Aeg: ${{ github.event.repository.updated_at }}
+
+            Kontrolli lehte: https://nirgu.ee
 
   nirgu-ssl:
     runs-on: ubuntu-latest
     steps:
       - name: Check nirgu.ee SSL
+        id: check
         run: |
           echo | openssl s_client -connect nirgu.ee:443 -servername nirgu.ee 2>/dev/null | openssl x509 -noout -dates
           expiry=$(echo | openssl s_client -connect nirgu.ee:443 -servername nirgu.ee 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
@@ -26,21 +47,59 @@ jobs:
           now_epoch=$(date +%s)
           days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
           echo "nirgu.ee SSL expires in $days_left days"
+          echo "days_left=$days_left" >> $GITHUB_OUTPUT
           [ $days_left -gt 7 ] || exit 1
+      - name: Send alert email
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "⚠️ nirgu.ee SSL sertifikaat aegub!"
+          to: info@nirgu.ee,ruusmann@gmail.com
+          from: Veebilehtede seire
+          body: |
+            nirgu.ee SSL sertifikaat aegub varsti!
+
+            Päevi jäänud: ${{ steps.check.outputs.days_left }}
+
+            Uuenda sertifikaati: https://zone.ee
 
   birdbusters-https:
     runs-on: ubuntu-latest
     steps:
       - name: Check birdbusters.eu HTTPS
+        id: check
         run: |
           status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 https://birdbusters.eu)
           echo "birdbusters.eu HTTPS: $status"
+          echo "status=$status" >> $GITHUB_OUTPUT
           [ "$status" = "200" ] || exit 1
+      - name: Send alert email
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "⚠️ birdbusters.eu HTTPS probleem"
+          to: info@birdbusters.eu,ruusmann@gmail.com
+          from: Veebilehtede seire
+          body: |
+            birdbusters.eu ei vasta või tagastas vea.
+
+            HTTP staatus: ${{ steps.check.outputs.status }}
+
+            Kontrolli lehte: https://birdbusters.eu
 
   birdbusters-ssl:
     runs-on: ubuntu-latest
     steps:
       - name: Check birdbusters.eu SSL
+        id: check
         run: |
           echo | openssl s_client -connect birdbusters.eu:443 -servername birdbusters.eu 2>/dev/null | openssl x509 -noout -dates
           expiry=$(echo | openssl s_client -connect birdbusters.eu:443 -servername birdbusters.eu 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
@@ -48,21 +107,59 @@ jobs:
           now_epoch=$(date +%s)
           days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
           echo "birdbusters.eu SSL expires in $days_left days"
+          echo "days_left=$days_left" >> $GITHUB_OUTPUT
           [ $days_left -gt 7 ] || exit 1
+      - name: Send alert email
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "⚠️ birdbusters.eu SSL sertifikaat aegub!"
+          to: info@birdbusters.eu,ruusmann@gmail.com
+          from: Veebilehtede seire
+          body: |
+            birdbusters.eu SSL sertifikaat aegub varsti!
+
+            Päevi jäänud: ${{ steps.check.outputs.days_left }}
+
+            Uuenda sertifikaati: https://zone.ee
 
   sharpy-https:
     runs-on: ubuntu-latest
     steps:
       - name: Check sharpy.ee HTTPS
+        id: check
         run: |
           status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 https://sharpy.ee)
           echo "sharpy.ee HTTPS: $status"
+          echo "status=$status" >> $GITHUB_OUTPUT
           [ "$status" = "200" ] || exit 1
+      - name: Send alert email
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "⚠️ sharpy.ee HTTPS probleem"
+          to: info@sharpy.ee,ruusmann@gmail.com
+          from: Veebilehtede seire
+          body: |
+            sharpy.ee ei vasta või tagastas vea.
+
+            HTTP staatus: ${{ steps.check.outputs.status }}
+
+            Kontrolli lehte: https://sharpy.ee
 
   sharpy-ssl:
     runs-on: ubuntu-latest
     steps:
       - name: Check sharpy.ee SSL
+        id: check
         run: |
           echo | openssl s_client -connect sharpy.ee:443 -servername sharpy.ee 2>/dev/null | openssl x509 -noout -dates
           expiry=$(echo | openssl s_client -connect sharpy.ee:443 -servername sharpy.ee 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
@@ -70,22 +167,60 @@ jobs:
           now_epoch=$(date +%s)
           days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
           echo "sharpy.ee SSL expires in $days_left days"
+          echo "days_left=$days_left" >> $GITHUB_OUTPUT
           [ $days_left -gt 7 ] || exit 1
+      - name: Send alert email
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "⚠️ sharpy.ee SSL sertifikaat aegub!"
+          to: info@sharpy.ee,ruusmann@gmail.com
+          from: Veebilehtede seire
+          body: |
+            sharpy.ee SSL sertifikaat aegub varsti!
+
+            Päevi jäänud: ${{ steps.check.outputs.days_left }}
+
+            Uuenda sertifikaati: https://zone.ee
 
   linnupeletaja-https:
     runs-on: ubuntu-latest
     steps:
       - name: Check linnupeletaja.ee HTTPS
+        id: check
         run: |
           status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 -k https://linnupeletaja.ee)
-          echo "linnupeletaja.ee HTTPS: $status (SSL check separate)"
+          echo "linnupeletaja.ee HTTPS: $status"
+          echo "status=$status" >> $GITHUB_OUTPUT
           [ "$status" = "200" ] || exit 1
+      - name: Send alert email
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "⚠️ linnupeletaja.ee HTTPS probleem"
+          to: info@nirgu.ee,ruusmann@gmail.com
+          from: Veebilehtede seire
+          body: |
+            linnupeletaja.ee ei vasta või tagastas vea.
+
+            HTTP staatus: ${{ steps.check.outputs.status }}
+
+            Kontrolli lehte: https://linnupeletaja.ee
 
   linnupeletaja-ssl:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
       - name: Check linnupeletaja.ee SSL
+        id: check
         run: |
           echo "⚠️ linnupeletaja.ee SSL has known issues"
           if echo | openssl s_client -connect linnupeletaja.ee:443 -servername linnupeletaja.ee 2>/dev/null | openssl x509 -noout -dates; then
@@ -94,8 +229,27 @@ jobs:
             now_epoch=$(date +%s)
             days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
             echo "linnupeletaja.ee SSL expires in $days_left days"
+            echo "days_left=$days_left" >> $GITHUB_OUTPUT
             [ $days_left -gt 7 ] || exit 1
           else
             echo "SSL certificate check failed - certificate may be invalid"
+            echo "days_left=INVALID" >> $GITHUB_OUTPUT
             exit 1
           fi
+      - name: Send alert email
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "⚠️ linnupeletaja.ee SSL probleem"
+          to: info@nirgu.ee,ruusmann@gmail.com
+          from: Veebilehtede seire
+          body: |
+            linnupeletaja.ee SSL sertifikaadiga on probleem!
+
+            Staatus: ${{ steps.check.outputs.days_left }}
+
+            NB: Sellel lehel on teadaolevad SSL probleemid.
