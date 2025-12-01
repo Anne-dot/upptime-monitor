@@ -1,0 +1,110 @@
+name: Weekly Summary
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"  # Esmaspäev kell 6:00 UTC (8:00 Eesti aeg)
+  workflow_dispatch:
+
+# ============================================
+# SEADISTUS
+# ============================================
+env:
+  TEST_MODE: "true"
+  TECH_EMAIL: "ruusmann@gmail.com"
+# ============================================
+
+jobs:
+  summary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all sites
+        id: check
+        run: |
+          echo "=== SALU OÜ veebilehtede nädalakokkuvõte ===" > summary.txt
+          echo "Kuupäev: $(date '+%Y-%m-%d %H:%M') UTC" >> summary.txt
+          echo "" >> summary.txt
+
+          all_ok=true
+
+          check_site() {
+            local site=$1
+            local skip_ssl=$2
+
+            # HTTPS check
+            if [ "$skip_ssl" = "true" ]; then
+              status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 -k "https://$site")
+            else
+              status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 "https://$site")
+            fi
+
+            if [ "$status" = "200" ]; then
+              https_status="✅"
+            else
+              https_status="❌ ($status)"
+              all_ok=false
+            fi
+
+            # SSL check
+            ssl_info=$(echo | openssl s_client -connect "$site:443" -servername "$site" 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
+            if [ -n "$ssl_info" ]; then
+              expiry_epoch=$(date -d "$ssl_info" +%s 2>/dev/null)
+              now_epoch=$(date +%s)
+              if [ -n "$expiry_epoch" ]; then
+                days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
+                if [ $days_left -gt 14 ]; then
+                  ssl_status="✅ ($days_left p)"
+                elif [ $days_left -gt 7 ]; then
+                  ssl_status="⚠️ ($days_left p)"
+                  all_ok=false
+                else
+                  ssl_status="❌ ($days_left p)"
+                  all_ok=false
+                fi
+              else
+                ssl_status="❌"
+                all_ok=false
+              fi
+            else
+              ssl_status="❌ puudub"
+              all_ok=false
+            fi
+
+            echo "$site: HTTPS $https_status | SSL $ssl_status" >> summary.txt
+          }
+
+          check_site "nirgu.ee" "false"
+          check_site "birdbusters.eu" "false"
+          check_site "sharpy.ee" "false"
+          check_site "linnupeletaja.ee" "true"
+
+          echo "" >> summary.txt
+          if [ "$all_ok" = true ]; then
+            echo "✅ Kõik korras!" >> summary.txt
+            echo "status=ok" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ Mõned probleemid vajavad tähelepanu" >> summary.txt
+            echo "status=issues" >> $GITHUB_OUTPUT
+          fi
+
+          echo "" >> summary.txt
+          echo "---" >> summary.txt
+          echo "Automaatne kontroll: https://github.com/Anne-dot/upptime-monitor" >> summary.txt
+
+          cat summary.txt
+
+          # Save for email
+          echo 'SUMMARY<<EOF' >> $GITHUB_OUTPUT
+          cat summary.txt >> $GITHUB_OUTPUT
+          echo 'EOF' >> $GITHUB_OUTPUT
+
+      - name: Send summary email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "${{ steps.check.outputs.status == 'ok' && '✅' || '⚠️' }} Nädalakokkuvõte - SALU OÜ veebilehed"
+          to: ${{ env.TECH_EMAIL }}
+          from: Veebilehtede seire
+          body: ${{ steps.check.outputs.SUMMARY }}
