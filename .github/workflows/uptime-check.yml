@@ -1,0 +1,46 @@
+name: Uptime Check
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"  # Iga 5 min
+  workflow_dispatch:  # Käsitsi käivitamine
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check nirgu.ee
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" https://nirgu.ee)
+          if [ "$status" != "200" ]; then
+            echo "nirgu.ee DOWN! Status: $status"
+            exit 1
+          fi
+          echo "nirgu.ee OK ($status)"
+
+      - name: Check birdbusters.eu
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" https://birdbusters.eu)
+          if [ "$status" != "200" ]; then
+            echo "birdbusters.eu DOWN! Status: $status"
+            exit 1
+          fi
+          echo "birdbusters.eu OK ($status)"
+
+      - name: Check sharpy.ee
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" https://sharpy.ee)
+          if [ "$status" != "200" ]; then
+            echo "sharpy.ee DOWN! Status: $status"
+            exit 1
+          fi
+          echo "sharpy.ee OK ($status)"
+
+      - name: Check linnupeletaja.ee
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" https://linnupeletaja.ee)
+          if [ "$status" != "200" ]; then
+            echo "linnupeletaja.ee DOWN! Status: $status"
+            exit 1
+          fi
+          echo "linnupeletaja.ee OK ($status)"
