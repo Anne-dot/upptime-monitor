@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  check:
+  nirgu:
     runs-on: ubuntu-latest
     steps:
       - name: Check nirgu.ee
@@ -15,20 +15,29 @@ jobs:
           echo "nirgu.ee: $status"
           [ "$status" = "200" ] || exit 1
 
+  birdbusters:
+    runs-on: ubuntu-latest
+    steps:
       - name: Check birdbusters.eu
         run: |
           status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 https://birdbusters.eu)
           echo "birdbusters.eu: $status"
           [ "$status" = "200" ] || exit 1
 
+  sharpy:
+    runs-on: ubuntu-latest
+    steps:
       - name: Check sharpy.ee
         run: |
           status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 https://sharpy.ee)
           echo "sharpy.ee: $status"
           [ "$status" = "200" ] || exit 1
 
+  linnupeletaja:
+    runs-on: ubuntu-latest
+    steps:
       - name: Check linnupeletaja.ee
         run: |
           status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 -k https://linnupeletaja.ee)
-          echo "linnupeletaja.ee: $status (SSL check skipped)"
+          echo "linnupeletaja.ee: $status"
           [ "$status" = "200" ] || exit 1
