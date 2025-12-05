@@ -2,7 +2,7 @@ name: Weekly Summary
 
 on:
   schedule:
-    - cron: "0 6 * * 1"  # Esmaspaev kell 6:00 UTC (8:00 Eesti aeg)
+    - cron: "0 6 * * 1"  # Esmaspäev kell 6:00 UTC (8:00 Eesti aeg)
   workflow_dispatch:
 
 env:
@@ -13,13 +13,13 @@ jobs:
   summary:
     runs-on: ubuntu-latest
     steps:
-      - name: Kogu nadalastatistika
+      - name: Kogu nädalastatistika
         id: stats
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "=== IGANADALANE ULEVAADE ===" > summary.txt
-          echo "Kuupaev: $(date '+%Y-%m-%d %H:%M') UTC" >> summary.txt
+          echo "=== IGANÄDALANE ÜLEVAADE ===" > summary.txt
+          echo "Kuupäev: $(date '+%Y-%m-%d %H:%M') UTC" >> summary.txt
           echo "" >> summary.txt
           
           # ============================================
@@ -78,10 +78,10 @@ jobs:
                     ssl_result="✅ ${days_left}p"
                   elif [ $days_left -gt 14 ]; then
                     ssl_result="⚠️ ${days_left}p"
-                    ssl_warnings="$ssl_warnings\n- $name: $days_left paeva"
+                    ssl_warnings="$ssl_warnings\n- $name: $days_left päeva"
                   else
                     ssl_result="🔴 ${days_left}p"
-                    ssl_warnings="$ssl_warnings\n- $name: $days_left paeva"
+                    ssl_warnings="$ssl_warnings\n- $name: $days_left päeva"
                     all_ok=false
                   fi
                 fi
@@ -107,31 +107,21 @@ jobs:
           echo "" >> summary.txt
           
           # ============================================
-          # 2. NADALA VEAD (iga veebilehe kohta)
+          # 2. NÄDALA VEAD (iga veebilehe kohta)
           # ============================================
-          echo "## NADALA VEAD" >> summary.txt
+          echo "## NÄDALA VEAD" >> summary.txt
           echo "" >> summary.txt
           
-          # Kogu viimase 7 paeva failed job'id
           week_ago=$(date -d '7 days ago' -Iseconds)
           
-          # Saa koik failed runid
           failed_run_ids=$(gh api "repos/$GITHUB_REPO/actions/runs?status=failure&created=>$week_ago&per_page=100" --jq '.workflow_runs[].id' 2>/dev/null)
           
-          # Loenda vead veebilehtede kaupa
-          declare -A site_errors
-          site_errors[nirgu]=0
-          site_errors[birdbusters]=0
-          site_errors[sharpy]=0
-          site_errors[linnupeletaja]=0
-          site_errors[lasteaiapildid]=0
-          site_errors[athliit]=0
+          rm -f /tmp/errors.txt
+          touch /tmp/errors.txt
           
           for run_id in $failed_run_ids; do
-            # Saa failed jobid sellest runist
             failed_jobs=$(gh api "repos/$GITHUB_REPO/actions/runs/$run_id/jobs" --jq '.jobs[] | select(.conclusion == "failure") | .name' 2>/dev/null)
             
-            # Loenda iga saidi vead
             echo "$failed_jobs" | while read job_name; do
               case "$job_name" in
                 *nirgu*) echo "nirgu" >> /tmp/errors.txt ;;
@@ -144,8 +134,6 @@ jobs:
             done
           done
           
-          # Loe kokku
-          touch /tmp/errors.txt
           nirgu_err=$(grep -c "nirgu" /tmp/errors.txt 2>/dev/null || echo "0")
           birdbusters_err=$(grep -c "birdbusters" /tmp/errors.txt 2>/dev/null || echo "0")
           sharpy_err=$(grep -c "sharpy" /tmp/errors.txt 2>/dev/null || echo "0")
@@ -176,7 +164,7 @@ jobs:
           print_errors "athliit.ee" "$athliit_err"
           
           echo "" >> summary.txt
-          echo "Kokku: $total_errors viga viimase 7 paeva jooksul" >> summary.txt
+          echo "Kokku: $total_errors viga viimase 7 päeva jooksul" >> summary.txt
           echo "" >> summary.txt
           
           # ============================================
@@ -200,21 +188,21 @@ jobs:
           echo "## REPO" >> summary.txt
           visibility=$(gh api "repos/$GITHUB_REPO" --jq '.visibility' 2>/dev/null || echo "unknown")
           if [ "$visibility" = "private" ]; then
-            echo "⚠️ PRIVATE - jalgi minuteid" >> summary.txt
+            echo "⚠️ PRIVATE - jälgi minuteid" >> summary.txt
           else
             echo "✅ PUBLIC" >> summary.txt
           fi
           echo "" >> summary.txt
           
           # ============================================
-          # 5. KOKKUVOTE
+          # 5. KOKKUVÕTE
           # ============================================
           echo "---" >> summary.txt
           if [ "$all_ok" = true ] && [ "$total_errors" -eq 0 ]; then
-            echo "✅ KOIK KORRAS!" >> summary.txt
+            echo "✅ KÕIK KORRAS!" >> summary.txt
             echo "status=ok" >> $GITHUB_OUTPUT
           else
-            echo "⚠️ VAATA ULEVALPOOL" >> summary.txt
+            echo "⚠️ VAATA ÜLEVALPOOL" >> summary.txt
             echo "status=issues" >> $GITHUB_OUTPUT
           fi
           
@@ -227,14 +215,14 @@ jobs:
           cat summary.txt >> $GITHUB_OUTPUT
           echo 'EOF' >> $GITHUB_OUTPUT
 
-      - name: Saada kokkuvote meil
+      - name: Saada kokkuvõte meil
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "${{ steps.stats.outputs.status == 'ok' && '✅' || '⚠️' }} Iganadalane ulevaade - Veebilehed"
+          subject: "${{ steps.stats.outputs.status == 'ok' && '✅' || '⚠️' }} Iganädalane ülevaade - Veebilehed"
           to: ${{ env.TECH_EMAIL }}
           from: Veebilehtede seire
           body: ${{ steps.stats.outputs.SUMMARY }}
