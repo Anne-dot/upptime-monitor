@@ -21,14 +21,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "=== NADALAKOKKUVOTE ===" > summary.txt
+          echo "=== IGANADALANE ULEVAADE ===" > summary.txt
           echo "Kuupaev: $(date '+%Y-%m-%d %H:%M') UTC" >> summary.txt
           echo "" >> summary.txt
           
           # ============================================
-          # 1. SAITIDE STAATUS JA KIIRUS
+          # 1. VEEBILEHTEDE STAATUS JA KIIRUS
           # ============================================
-          echo "## SAITIDE STAATUS" >> summary.txt
+          echo "## VEEBILEHTEDE STAATUS" >> summary.txt
           echo "" >> summary.txt
           
           all_ok=true
@@ -100,7 +100,7 @@ jobs:
             printf "%-20s | %-15s | %s\n" "$name" "$https_result" "$ssl_result" >> summary.txt
           }
           
-          printf "%-20s | %-15s | %s\n" "Sait" "Kiirus" "SSL" >> summary.txt
+          printf "%-20s | %-15s | %s\n" "Veebileht" "Kiirus" "SSL" >> summary.txt
           printf "%-20s | %-15s | %s\n" "--------------------" "---------------" "--------" >> summary.txt
           
           check_site "nirgu.ee" "https://nirgu.ee" "true"
@@ -130,7 +130,6 @@ jobs:
           # Viimase 7 paeva failed workflow runs
           week_ago=$(date -d '7 days ago' -Iseconds)
           
-          # Proovi saada workflow runs
           failed_runs=$(gh api "repos/$GITHUB_REPO/actions/runs?status=failure&created=>$week_ago" --jq '.total_count' 2>/dev/null || echo "?")
           success_runs=$(gh api "repos/$GITHUB_REPO/actions/runs?status=success&created=>$week_ago" --jq '.total_count' 2>/dev/null || echo "?")
           
@@ -152,12 +151,11 @@ jobs:
           echo "" >> summary.txt
           
           # ============================================
-          # 4. GITHUB ACTIONS KASUTUS (private repo jaoks)
+          # 4. GITHUB ACTIONS KASUTUS
           # ============================================
           echo "## ACTIONS KASUTUS" >> summary.txt
           echo "" >> summary.txt
           
-          # Kontrolli kas repo on private
           visibility=$(gh api "repos/$GITHUB_REPO" --jq '.visibility' 2>/dev/null || echo "unknown")
           
           if [ "$visibility" = "private" ]; then
@@ -187,7 +185,6 @@ jobs:
           
           cat summary.txt
           
-          # Save for email
           echo 'SUMMARY<<EOF' >> $GITHUB_OUTPUT
           cat summary.txt >> $GITHUB_OUTPUT
           echo 'EOF' >> $GITHUB_OUTPUT
@@ -199,7 +196,7 @@ jobs:
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "${{ steps.stats.outputs.status == 'ok' && '✅' || '⚠️' }} Nadalakokkuvote - Veebilehed"
+          subject: "${{ steps.stats.outputs.status == 'ok' && '✅' || '⚠️' }} Iganadalane ulevaade - Veebilehed"
           to: ${{ env.TECH_EMAIL }}
           from: Veebilehtede seire
           body: ${{ steps.stats.outputs.SUMMARY }}
