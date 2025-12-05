@@ -19,7 +19,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           echo "=== IGANÄDALANE ÜLEVAADE ===" > summary.txt
-          echo "Kuupäev: $(date '+%Y-%m-%d %H:%M') UTC" >> summary.txt
+          echo "Kuupäev: $(TZ='Europe/Tallinn' date '+%Y-%m-%d %H:%M') Eesti aeg" >> summary.txt
           echo "" >> summary.txt
           
           # ============================================
