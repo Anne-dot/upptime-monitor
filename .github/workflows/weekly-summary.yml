@@ -35,43 +35,48 @@ jobs:
               .ok { color: #22863a; }
               .warn { color: #b08800; }
               .error { color: #cb2431; }
+              .site-block { margin: 12px 0; }
+              .site-name { font-weight: 600; }
+              .error-item { margin-left: 16px; color: #666; font-size: 13px; }
             </style>
           </head>
           <body>
           HTMLHEAD
-          
+
           echo "<h1>📊 Iganädalane ülevaade</h1>" >> summary.html
           echo "<p style='color:#888;font-size:13px;'>$(TZ='Europe/Tallinn' date '+%Y-%m-%d %H:%M %Z')</p>" >> summary.html
-          
+
           # Legend
           echo "<div class='legend'>" >> summary.html
           echo "<strong>Kiirus:</strong> 🚀 &lt;0,5s &nbsp; 🟢 0,5-1s &nbsp; 🟡 1-3s &nbsp; 🔴 &gt;3s &nbsp;&nbsp;" >> summary.html
           echo "<strong>SSL:</strong> 🟢 &gt;30p &nbsp; 🟡 14-30p &nbsp; 🔴 &lt;14p" >> summary.html
           echo "</div>" >> summary.html
-          
+
           # ============================================
           # 1. VEEBILEHTEDE STAATUS
           # ============================================
           echo "<h2>Hetke staatus</h2>" >> summary.html
           echo "<table>" >> summary.html
-          echo "<tr><th>Veebileht</th><th>Kiirus</th><th>SSL</th></tr>" >> summary.html
-          
+          echo "<tr><th>Veebileht</th><th>Kiirus (s)</th><th>SSL</th></tr>" >> summary.html
+
           all_ok=true
           ssl_warnings=""
           slow_sites=""
-          
+
           check_site() {
             local name=$1
             local url=$2
             local check_ssl=$3
-            
+
             start_time=$(date +%s%N)
             status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 "$url" 2>/dev/null)
             end_time=$(date +%s%N)
-            
+
             duration_ms=$(( (end_time - start_time) / 1000000 ))
-            duration_sec=$(echo "scale=1; $duration_ms / 1000" | bc | sed 's/\./,/')
-            
+
+            # FIX: Formaat "0,6" mitte ",6"
+            duration_sec=$(printf "%.1f" "$(echo "scale=1; $duration_ms / 1000" | bc)" | sed 's/\./,/')
+
             if [ "$status" = "200" ]; then
               if [ $duration_ms -lt 500 ]; then
                 speed_icon="🚀"
@@ -81,15 +86,15 @@ jobs:
                 speed_icon="🟡"
               else
                 speed_icon="🔴"
-                slow_sites="$slow_sites<li>$name: ${duration_sec}s</li>"
+                slow_sites="$slow_sites<li>$name: ${duration_sec}</li>"
                 all_ok=false
               fi
-              speed_result="$speed_icon ${duration_sec}s"
+              speed_result="$speed_icon $duration_sec"
             else
               speed_result="❌ HTTP $status"
               all_ok=false
             fi
-            
+
             ssl_result="-"
             if [ "$check_ssl" = "true" ]; then
               host=$(echo "$url" | sed 's|https://||' | sed 's|/.*||')
@@ -115,35 +120,38 @@ jobs:
                 all_ok=false
               fi
             fi
-            
+
             echo "<tr><td>$name</td><td>$speed_result</td><td>$ssl_result</td></tr>" >> summary.html
           }
-          
+
           check_site "nirgu.ee" "https://nirgu.ee" "true"
           check_site "birdbusters.eu" "https://birdbusters.eu" "true"
           check_site "sharpy.ee" "https://sharpy.ee" "true"
           check_site "linnupeletaja.ee" "http://linnupeletaja.ee" "false"
           check_site "lasteaiapildid.ee" "https://lasteaiapildid.ee" "true"
           check_site "athliit.ee" "https://athliit.ee" "true"
-          
+
           echo "</table>" >> summary.html
-          
+
           # ============================================
-          # 2. NÄDALA VEAD
+          # 2. NÄDALA PROBLEEMID
           # ============================================
-          echo "<h2>Nädala vead</h2>" >> summary.html
-          
           week_ago=$(date -d '7 days ago' -Iseconds)
           rm -f /tmp/errors_detailed.txt
           touch /tmp/errors_detailed.txt
-          
+
+          # Kogu vead koos põhjustega
           failed_run_ids=$(gh api "repos/$GITHUB_REPO/actions/runs?status=failure&created=>$week_ago&per_page=100" --jq '.workflow_runs[].id' 2>/dev/null)
-          
+
           for run_id in $failed_run_ids; do
-            run_time=$(gh api "repos/$GITHUB_REPO/actions/runs/$run_id" --jq '.created_at[0:10]' 2>/dev/null)
+            run_date=$(gh api "repos/$GITHUB_REPO/actions/runs/$run_id" --jq '.created_at[5:10]' 2>/dev/null | sed 's/-/./')
+
             failed_jobs=$(gh api "repos/$GITHUB_REPO/actions/runs/$run_id/jobs" --jq '.jobs[] | select(.conclusion == "failure") | .name' 2>/dev/null)
-            
-            echo "$failed_jobs" | while read job_name; do
+
+            echo "$failed_jobs" | while read -r job_name; do
+              [ -z "$job_name" ] && continue
+
+              # Määra leht
               site=""
               case "$job_name" in
                 *nirgu*) site="nirgu.ee" ;;
@@ -152,35 +160,57 @@ jobs:
                 *linnupeletaja*) site="linnupeletaja.ee" ;;
                 *lasteaiapildid*) site="lasteaiapildid.ee" ;;
                 *athliit*) site="athliit.ee" ;;
-                *) site="monitoring" ;;
+                *) site="system" ;;
               esac
-              echo "$site|$run_time" >> /tmp/errors_detailed.txt
+
+              # Määra põhjus job nime järgi
+              reason="HTTP kontroll"
+              case "$job_name" in
+                *SSL*|*ssl*) reason="SSL kontroll" ;;
+                *Check*https*|*check*https*) reason="HTTP kontroll" ;;
+              esac
+
+              echo "$site|$reason|$run_date" >> /tmp/errors_detailed.txt
             done
           done
-          
-          if [ -s /tmp/errors_detailed.txt ]; then
-            echo "<table>" >> summary.html
-            echo "<tr><th>Veebileht</th><th>Vead</th></tr>" >> summary.html
-            
+
+          # Arvuta statistika ja näita
+          total_site_errors=0
+          for site in "nirgu.ee" "birdbusters.eu" "sharpy.ee" "linnupeletaja.ee" "lasteaiapildid.ee" "athliit.ee"; do
+            count=$(grep -c "^$site|" /tmp/errors_detailed.txt 2>/dev/null || echo "0")
+            total_site_errors=$((total_site_errors + count))
+          done
+
+          if [ "$total_site_errors" -gt 0 ]; then
+            echo "<h2>⚠️ Probleemid nädalal</h2>" >> summary.html
+
             for site in "nirgu.ee" "birdbusters.eu" "sharpy.ee" "linnupeletaja.ee" "lasteaiapildid.ee" "athliit.ee"; do
-              error_count=$(grep -c "^$site|" /tmp/errors_detailed.txt 2>/dev/null || echo "0")
-              if [ "$error_count" -gt 0 ]; then
-                echo "<tr><td>$site</td><td class='warn'>⚠️ $error_count</td></tr>" >> summary.html
-              else
-                echo "<tr><td>$site</td><td class='ok'>✅ 0</td></tr>" >> summary.html
-              fi
+              site_errors=$(grep "^$site|" /tmp/errors_detailed.txt 2>/dev/null || true)
+              [ -z "$site_errors" ] && continue
+
+              echo "<div class='site-block'>" >> summary.html
+              echo "<div class='site-name'>$site</div>" >> summary.html
+
+              # Grupeeri põhjuse järgi, näita viimane kuupäev ja arv
+              echo "$site_errors" | cut -d'|' -f2 | sort | uniq -c | sort -rn | head -3 | while read -r count reason; do
+                # Leia viimane kuupäev selle põhjuse jaoks
+                last_date=$(echo "$site_errors" | grep "|$reason|" | cut -d'|' -f3 | sort -r | head -1)
+                echo "<div class='error-item'>• $reason - viimati $last_date (${count}x)</div>" >> summary.html
+              done
+
+              echo "</div>" >> summary.html
             done
-            
-            echo "</table>" >> summary.html
-            
-            monitoring_errors=$(grep -c "^monitoring|" /tmp/errors_detailed.txt 2>/dev/null || echo "0")
-            if [ "$monitoring_errors" -gt 0 ]; then
-              echo "<p style='color:#888;font-size:12px;'>+ $monitoring_errors monitoring viga (billing/süsteem)</p>" >> summary.html
-            fi
           else
+            echo "<h2>Nädala vead</h2>" >> summary.html
             echo "<p class='ok'>✅ Vigu polnud!</p>" >> summary.html
           fi
-          
+
+          # Süsteemivead
+          system_errors=$(grep -c "^system|" /tmp/errors_detailed.txt 2>/dev/null || echo "0")
+          if [ "$system_errors" -gt 0 ]; then
+            echo "<p style='color:#888;font-size:12px;margin-top:8px;'>ℹ️ + $system_errors süsteemiviga (billing/GitHub)</p>" >> summary.html
+          fi
+
           # ============================================
           # 3. HOIATUSED
           # ============================================
@@ -188,18 +218,17 @@ jobs:
             echo "<h2>⚠️ SSL aegub varsti</h2>" >> summary.html
             echo "<ul>$ssl_warnings</ul>" >> summary.html
           fi
-          
+
           if [ -n "$slow_sites" ]; then
             echo "<h2>🐌 Aeglased lehed</h2>" >> summary.html
             echo "<ul>$slow_sites</ul>" >> summary.html
           fi
-          
+
           # ============================================
           # Footer
           # ============================================
-          total_errors=$(wc -l < /tmp/errors_detailed.txt 2>/dev/null || echo "0")
           echo "<div class='footer'>" >> summary.html
-          if [ "$all_ok" = true ] && [ "$total_errors" -eq 0 ]; then
+          if [ "$all_ok" = true ] && [ "$total_site_errors" -eq 0 ]; then
             echo "<strong class='ok'>✅ Kõik korras!</strong><br>" >> summary.html
             echo "status=ok" >> $GITHUB_OUTPUT
           else
@@ -208,11 +237,11 @@ jobs:
           fi
           echo "<a href='https://github.com/$GITHUB_REPO'>github.com/$GITHUB_REPO</a>" >> summary.html
           echo "</div>" >> summary.html
-          
+
           echo "</body></html>" >> summary.html
-          
+
           cat summary.html
-          
+
           # Save for email
           echo 'SUMMARY<<EOF' >> $GITHUB_OUTPUT
           cat summary.html >> $GITHUB_OUTPUT
