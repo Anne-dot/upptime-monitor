@@ -19,22 +19,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           echo "=== IGANÄDALANE ÜLEVAADE ===" > summary.txt
-          echo "Kuupäev: $(TZ='Europe/Tallinn' date '+%Y-%m-%d %H:%M') Eesti aeg" >> summary.txt
+          echo "$(TZ='Europe/Tallinn' date '+%Y-%m-%d %H:%M') Eesti aeg" >> summary.txt
           echo "" >> summary.txt
           
           # ============================================
           # LEGEND
           # ============================================
           echo "LEGEND:" >> summary.txt
-          echo "" >> summary.txt
-          echo "Kiirus   🚀 < 0,5s   🟢 0,5 - 1s   🟡 1 - 3s     🔴 > 3s" >> summary.txt
-          echo "SSL                  🟢 > 30p      🟡 14 - 30p   🔴 < 14p" >> summary.txt
+          echo "Kiirus   🚀 < 0,5s   🟢 0,5 - 1s   🟡 1 - 3s   🔴 > 3s" >> summary.txt
+          echo "SSL      🟢 > 30p    🟡 14 - 30p   🔴 < 14p" >> summary.txt
           echo "" >> summary.txt
           
           # ============================================
-          # 1. VEEBILEHTEDE STAATUS (hetke seis)
+          # 1. VEEBILEHTEDE STAATUS
           # ============================================
-          echo "## HETKE STAATUS" >> summary.txt
+          echo "── HETKE STAATUS ──" >> summary.txt
           echo "" >> summary.txt
           
           all_ok=true
@@ -62,16 +61,16 @@ jobs:
                 speed_icon="🟡"
               else
                 speed_icon="🔴"
-                slow_sites="$slow_sites\n- $name: ${duration_sec}s"
+                slow_sites="$slow_sites\n  $name: ${duration_sec}s"
                 all_ok=false
               fi
-              https_result="$speed_icon ${duration_sec}s"
+              speed_result="$speed_icon ${duration_sec}s"
             else
-              https_result="❌ HTTP $status"
+              speed_result="❌ HTTP $status"
               all_ok=false
             fi
             
-            ssl_result="-"
+            ssl_result=""
             if [ "$check_ssl" = "true" ]; then
               host=$(echo "$url" | sed 's|https://||' | sed 's|/.*||')
               ssl_info=$(echo | openssl s_client -connect "$host:443" -servername "$host" 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
@@ -84,10 +83,10 @@ jobs:
                     ssl_result="🟢 ${days_left}p"
                   elif [ $days_left -gt 14 ]; then
                     ssl_result="🟡 ${days_left}p"
-                    ssl_warnings="$ssl_warnings\n- $name: $days_left päeva"
+                    ssl_warnings="$ssl_warnings\n  $name: $days_left päeva"
                   else
                     ssl_result="🔴 ${days_left}p"
-                    ssl_warnings="$ssl_warnings\n- $name: $days_left päeva"
+                    ssl_warnings="$ssl_warnings\n  $name: $days_left päeva"
                     all_ok=false
                   fi
                 fi
@@ -95,13 +94,11 @@ jobs:
                 ssl_result="❌"
                 all_ok=false
               fi
+              ssl_result=" | SSL $ssl_result"
             fi
             
-            printf "%-20s | %-12s | %s\n" "$name" "$https_result" "$ssl_result" >> summary.txt
+            echo "$name: $speed_result$ssl_result" >> summary.txt
           }
-          
-          printf "%-20s | %-12s | %s\n" "Veebileht" "Kiirus (s)" "SSL" >> summary.txt
-          printf "%-20s | %-12s | %s\n" "--------------------" "------------" "--------" >> summary.txt
           
           check_site "nirgu.ee" "https://nirgu.ee" "true"
           check_site "birdbusters.eu" "https://birdbusters.eu" "true"
@@ -115,30 +112,25 @@ jobs:
           # ============================================
           # 2. NÄDALA VEAD (koos põhjustega)
           # ============================================
-          echo "## NÄDALA VEAD" >> summary.txt
+          echo "── NÄDALA VEAD ──" >> summary.txt
           echo "" >> summary.txt
           
           week_ago=$(date -d '7 days ago' -Iseconds)
           
-          # Kogu vead failist
           rm -f /tmp/errors_detailed.txt
           touch /tmp/errors_detailed.txt
           
-          # Saa failed runid
           failed_run_ids=$(gh api "repos/$GITHUB_REPO/actions/runs?status=failure&created=>$week_ago&per_page=100" --jq '.workflow_runs[].id' 2>/dev/null)
           
           for run_id in $failed_run_ids; do
-            # Saa run info (aeg)
             run_time=$(gh api "repos/$GITHUB_REPO/actions/runs/$run_id" --jq '.created_at[0:10]' 2>/dev/null)
             
-            # Saa failed jobid ja nende annotations
             failed_jobs=$(gh api "repos/$GITHUB_REPO/actions/runs/$run_id/jobs" --jq '.jobs[] | select(.conclusion == "failure") | {id: .id, name: .name}' 2>/dev/null)
             
             echo "$failed_jobs" | jq -c '.' 2>/dev/null | while read job_info; do
               job_id=$(echo "$job_info" | jq -r '.id')
               job_name=$(echo "$job_info" | jq -r '.name')
               
-              # Määra sait nime järgi
               site=""
               case "$job_name" in
                 *nirgu*) site="nirgu.ee" ;;
@@ -150,11 +142,9 @@ jobs:
                 *) site="monitoring" ;;
               esac
               
-              # Proovi saada vea põhjus annotatsioonidest
               annotation=$(gh api "repos/$GITHUB_REPO/check-runs/$job_id/annotations" --jq '.[0].message' 2>/dev/null | head -c 50)
               
               if [ -z "$annotation" ] || [ "$annotation" = "null" ]; then
-                # Kui annotation puudub, kasuta üldist põhjust
                 if echo "$annotation" | grep -qi "billing\|payment\|spending"; then
                   reason="billing limit"
                 elif echo "$job_name" | grep -qi "ssl"; then
@@ -163,7 +153,6 @@ jobs:
                   reason="HTTP kontroll"
                 fi
               else
-                # Lühenda annotation
                 reason=$(echo "$annotation" | cut -c1-40)
               fi
               
@@ -171,29 +160,26 @@ jobs:
             done
           done
           
-          # Kui vigu on
           if [ -s /tmp/errors_detailed.txt ]; then
-            # Grupeeri saidi kaupa
             for site in "nirgu.ee" "birdbusters.eu" "sharpy.ee" "linnupeletaja.ee" "lasteaiapildid.ee" "athliit.ee"; do
               site_errors=$(grep "^$site|" /tmp/errors_detailed.txt 2>/dev/null)
               error_count=$(echo "$site_errors" | grep -c "." 2>/dev/null || echo "0")
               
               if [ "$error_count" -gt 0 ] && [ -n "$site_errors" ]; then
-                echo "$site ($error_count viga):" >> summary.txt
+                echo "$site ($error_count):" >> summary.txt
                 echo "$site_errors" | head -3 | while IFS='|' read s date reason; do
-                  echo "  - $date: $reason" >> summary.txt
+                  echo "  $date: $reason" >> summary.txt
                 done
                 if [ "$error_count" -gt 3 ]; then
-                  echo "  - ... ja veel $((error_count - 3))" >> summary.txt
+                  echo "  ... +$((error_count - 3)) veel" >> summary.txt
                 fi
                 echo "" >> summary.txt
               fi
             done
             
-            # Monitoring vead eraldi
             monitoring_errors=$(grep "^monitoring|" /tmp/errors_detailed.txt 2>/dev/null | wc -l)
             if [ "$monitoring_errors" -gt 0 ]; then
-              echo "Monitoring vead: $monitoring_errors (billing/süsteem)" >> summary.txt
+              echo "Monitoring: $monitoring_errors viga (billing/süsteem)" >> summary.txt
               echo "" >> summary.txt
             fi
           else
@@ -202,47 +188,35 @@ jobs:
           fi
           
           # ============================================
-          # 3. HOIATUSED (ainult kui on)
+          # 3. HOIATUSED
           # ============================================
           if [ -n "$ssl_warnings" ]; then
-            echo "## ⚠️ SSL AEGUB VARSTI" >> summary.txt
+            echo "── ⚠️ SSL AEGUB ──" >> summary.txt
             echo -e "$ssl_warnings" >> summary.txt
             echo "" >> summary.txt
           fi
           
           if [ -n "$slow_sites" ]; then
-            echo "## 🐌 AEGLASED LEHED" >> summary.txt
+            echo "── 🐌 AEGLASED ──" >> summary.txt
             echo -e "$slow_sites" >> summary.txt
             echo "" >> summary.txt
           fi
           
           # ============================================
-          # 4. REPO STAATUS
+          # 4. KOKKUVÕTE
           # ============================================
-          echo "## REPO" >> summary.txt
-          visibility=$(gh api "repos/$GITHUB_REPO" --jq '.visibility' 2>/dev/null || echo "unknown")
-          if [ "$visibility" = "private" ]; then
-            echo "⚠️ PRIVATE - jälgi minuteid" >> summary.txt
-          else
-            echo "✅ PUBLIC" >> summary.txt
-          fi
-          echo "" >> summary.txt
-          
-          # ============================================
-          # 5. KOKKUVÕTE
-          # ============================================
-          echo "---" >> summary.txt
+          echo "───────────────────" >> summary.txt
           total_errors=$(wc -l < /tmp/errors_detailed.txt 2>/dev/null || echo "0")
           if [ "$all_ok" = true ] && [ "$total_errors" -eq 0 ]; then
-            echo "✅ KÕIK KORRAS!" >> summary.txt
+            echo "✅ KÕIK KORRAS" >> summary.txt
             echo "status=ok" >> $GITHUB_OUTPUT
           else
-            echo "⚠️ VAATA ÜLEVALPOOL" >> summary.txt
+            echo "⚠️ Vaata ülevalpool" >> summary.txt
             echo "status=issues" >> $GITHUB_OUTPUT
           fi
           
           echo "" >> summary.txt
-          echo "https://github.com/$GITHUB_REPO" >> summary.txt
+          echo "github.com/$GITHUB_REPO" >> summary.txt
           
           cat summary.txt
           
