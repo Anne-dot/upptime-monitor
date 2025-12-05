@@ -1,34 +1,52 @@
-name: Uptime Check v2
+name: Uptime Check v2 (Single Job)
+
+# ============================================
+# VERSIOON 2 - OPTIMEERITUD PRIVAATSELE REPOLE
+# 
+# Erinevus v1-st:
+# - 1 job (vs 11) = ~11x vahem minuteid
+# - Kontrollid jooksevad jarjest, mitte paralleelselt
+# - Sama loogika ja meilid kui v1
+#
+# Kasutamine:
+# - TEST_MODE="true" = ainult TECH_EMAIL saab meile
+# - TEST_MODE="false" = koik kontaktid saavad meile
+# ============================================
 
 on:
   # schedule:
-  #   - cron: "*/30 * * * *"
+  #   - cron: "*/30 * * * *"  # Aktiveeri kui repo on PRIVATE
   workflow_dispatch:
 
+# ============================================
+# SEADISTUS - MUUDA SIIT
+# ============================================
 env:
-  TEST_MODE: "false"
+  TEST_MODE: "true"  # true = ainult TECH_EMAIL saab meile (testimiseks)
   TECH_EMAIL: "ruusmann@gmail.com"
 
 jobs:
-  check-all:
+  # ============================================
+  # KOIK KONTROLLID UHES JOBIS
+  # 
+  # Kontrollib koiki saite jarjest:
+  # 1. Kas leht vastab (timeout 30 sek)
+  # 2. Kas HTTP staatus on 200
+  # 3. Kas lehel pole PHP vigu (ainult PHP lehtedel)
+  # 4. Kas vastus pole tuhi
+  # 5. Kas SSL sertifikaat on kehtiv (>7 paeva)
+  # ============================================
+  check-all-sites:
     runs-on: ubuntu-latest
-    outputs:
-      nirgu_failed: ${{ steps.check.outputs.nirgu_failed }}
-      nirgu_reason: ${{ steps.check.outputs.nirgu_reason }}
-      birdbusters_failed: ${{ steps.check.outputs.birdbusters_failed }}
-      birdbusters_reason: ${{ steps.check.outputs.birdbusters_reason }}
-      sharpy_failed: ${{ steps.check.outputs.sharpy_failed }}
-      sharpy_reason: ${{ steps.check.outputs.sharpy_reason }}
-      linnupeletaja_failed: ${{ steps.check.outputs.linnupeletaja_failed }}
-      linnupeletaja_reason: ${{ steps.check.outputs.linnupeletaja_reason }}
-      lasteaiapildid_failed: ${{ steps.check.outputs.lasteaiapildid_failed }}
-      lasteaiapildid_reason: ${{ steps.check.outputs.lasteaiapildid_reason }}
-      athliit_failed: ${{ steps.check.outputs.athliit_failed }}
-      athliit_reason: ${{ steps.check.outputs.athliit_reason }}
     steps:
-      - name: Check all sites
+      - name: Kontrolli koiki saite
         id: check
         run: |
+          echo "========================================"
+          echo "Uptime Check v2 - $(date)"
+          echo "========================================"
+          
+          # Funktsioon uhe saidi kontrollimiseks
           check_site() {
             local name="$1"
             local url="$2"
@@ -36,53 +54,90 @@ jobs:
             local check_ssl="$4"
             local var_name="$5"
             
+            echo ""
             echo "--- $name ---"
             local reason=""
             
+            # 1. Lehe laadimine
             if ! response=$(curl -sL --max-time 30 "$url" 2>&1); then
               reason="Timeout - leht ei vastanud 30 sekundi jooksul"
             else
+              echo "OK: Leht laadis"
+              
+              # 2. HTTP staatus
               status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 "$url")
               if [ "$status" != "200" ]; then
                 reason="HTTP viga: $status"
-              elif [ "$is_php" = "true" ] && echo "$response" | grep -qiE "(Fatal error|Parse error|Warning:|Exception)"; then
-                reason="PHP viga lehel"
-              elif [ ${#response} -lt 500 ]; then
-                reason="Tuhi voi liiga luhike vastus (${#response} bytes)"
-              elif [ "$check_ssl" = "true" ]; then
-                host=$(echo "$url" | sed 's|https://||' | sed 's|/.*||')
-                expiry=$(echo | openssl s_client -connect "$host:443" -servername "$host" 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
-                if [ -n "$expiry" ]; then
-                  expiry_epoch=$(date -d "$expiry" +%s 2>/dev/null || echo "0")
-                  now_epoch=$(date +%s)
-                  if [ "$expiry_epoch" != "0" ]; then
-                    days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
-                    if [ $days_left -le 7 ]; then
-                      reason="SSL aegub $days_left paeva parast"
+              else
+                echo "OK: HTTP $status"
+                
+                # 3. PHP vead
+                if [ "$is_php" = "true" ]; then
+                  if echo "$response" | grep -qiE "(Fatal error|Parse error|Warning:|Exception)"; then
+                    reason="PHP viga lehel"
+                  else
+                    echo "OK: PHP vigu pole"
+                  fi
+                fi
+                
+                # 4. Tuhi vastus
+                if [ -z "$reason" ] && [ ${#response} -lt 500 ]; then
+                  reason="Tuhi voi liiga luhike vastus (${#response} bytes)"
+                fi
+                
+                # 5. SSL kontroll
+                if [ -z "$reason" ] && [ "$check_ssl" = "true" ]; then
+                  host=$(echo "$url" | sed 's|https://||' | sed 's|/.*||')
+                  expiry=$(echo | openssl s_client -connect "$host:443" -servername "$host" 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
+                  if [ -n "$expiry" ]; then
+                    expiry_epoch=$(date -d "$expiry" +%s 2>/dev/null || echo "0")
+                    now_epoch=$(date +%s)
+                    if [ "$expiry_epoch" != "0" ]; then
+                      days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
+                      if [ $days_left -le 7 ]; then
+                        reason="SSL sertifikaat aegub $days_left paeva parast"
+                      else
+                        echo "OK: SSL kehtib veel $days_left paeva"
+                      fi
                     fi
                   fi
                 fi
               fi
             fi
             
+            # Salvesta tulemus
             if [ -n "$reason" ]; then
               echo "${var_name}_failed=true" >> $GITHUB_OUTPUT
               echo "${var_name}_reason=$reason" >> $GITHUB_OUTPUT
-              echo "FAIL: $reason"
+              echo "VIGA: $reason"
             else
               echo "${var_name}_failed=false" >> $GITHUB_OUTPUT
-              echo "OK"
+              echo "KOIK OK"
             fi
           }
           
+          # ============================================
+          # SAITIDE NIMEKIRI - MUUDA SIIT
+          # ============================================
           check_site "nirgu.ee" "https://nirgu.ee" "true" "true" "nirgu"
           check_site "birdbusters.eu" "https://birdbusters.eu" "true" "true" "birdbusters"
           check_site "sharpy.ee" "https://sharpy.ee" "true" "true" "sharpy"
           check_site "linnupeletaja.ee" "http://linnupeletaja.ee" "true" "false" "linnupeletaja"
           check_site "lasteaiapildid.ee" "https://lasteaiapildid.ee" "false" "true" "lasteaiapildid"
           check_site "athliit.ee" "https://athliit.ee" "true" "true" "athliit"
+          
+          echo ""
+          echo "========================================"
+          echo "Kontroll lopetatud"
+          echo "========================================"
 
-      - name: Alert nirgu.ee
+      # ============================================
+      # MEILITEAVITUSED
+      # Iga sait saab oma teate oigele kontaktile
+      # TEST_MODE=true -> ainult TECH_EMAIL
+      # ============================================
+      
+      - name: Teavitus - nirgu.ee
         if: steps.check.outputs.nirgu_failed == 'true'
         uses: dawidd6/action-send-mail@v3
         with:
@@ -90,15 +145,17 @@ jobs:
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "[ALERT] nirgu.ee probleem"
-          to: info@nirgu.ee,${{ env.TECH_EMAIL }}
+          subject: "⚠️ nirgu.ee probleem"
+          to: ${{ env.TEST_MODE == 'true' && env.TECH_EMAIL || format('info@nirgu.ee,{0}', env.TECH_EMAIL) }}
           from: Veebilehtede seire
           body: |
             nirgu.ee ei toota!
+            
             Pohjus: ${{ steps.check.outputs.nirgu_reason }}
-            Kontrolli: https://nirgu.ee
+            
+            Kontrolli lehte: https://nirgu.ee
 
-      - name: Alert birdbusters.eu
+      - name: Teavitus - birdbusters.eu
         if: steps.check.outputs.birdbusters_failed == 'true'
         uses: dawidd6/action-send-mail@v3
         with:
@@ -106,15 +163,17 @@ jobs:
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "[ALERT] birdbusters.eu probleem"
-          to: info@birdbusters.eu,${{ env.TECH_EMAIL }}
+          subject: "⚠️ birdbusters.eu probleem"
+          to: ${{ env.TEST_MODE == 'true' && env.TECH_EMAIL || format('info@birdbusters.eu,{0}', env.TECH_EMAIL) }}
           from: Veebilehtede seire
           body: |
             birdbusters.eu ei toota!
+            
             Pohjus: ${{ steps.check.outputs.birdbusters_reason }}
-            Kontrolli: https://birdbusters.eu
+            
+            Kontrolli lehte: https://birdbusters.eu
 
-      - name: Alert sharpy.ee
+      - name: Teavitus - sharpy.ee
         if: steps.check.outputs.sharpy_failed == 'true'
         uses: dawidd6/action-send-mail@v3
         with:
@@ -122,15 +181,17 @@ jobs:
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "[ALERT] sharpy.ee probleem"
-          to: info@sharpy.ee,${{ env.TECH_EMAIL }}
+          subject: "⚠️ sharpy.ee probleem"
+          to: ${{ env.TEST_MODE == 'true' && env.TECH_EMAIL || format('info@sharpy.ee,{0}', env.TECH_EMAIL) }}
           from: Veebilehtede seire
           body: |
             sharpy.ee ei toota!
+            
             Pohjus: ${{ steps.check.outputs.sharpy_reason }}
-            Kontrolli: https://sharpy.ee
+            
+            Kontrolli lehte: https://sharpy.ee
 
-      - name: Alert linnupeletaja.ee
+      - name: Teavitus - linnupeletaja.ee
         if: steps.check.outputs.linnupeletaja_failed == 'true'
         uses: dawidd6/action-send-mail@v3
         with:
@@ -138,15 +199,17 @@ jobs:
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "[ALERT] linnupeletaja.ee probleem"
-          to: info@nirgu.ee,${{ env.TECH_EMAIL }}
+          subject: "⚠️ linnupeletaja.ee probleem"
+          to: ${{ env.TEST_MODE == 'true' && env.TECH_EMAIL || format('info@nirgu.ee,{0}', env.TECH_EMAIL) }}
           from: Veebilehtede seire
           body: |
             linnupeletaja.ee ei toota!
+            
             Pohjus: ${{ steps.check.outputs.linnupeletaja_reason }}
-            Kontrolli: http://linnupeletaja.ee
+            
+            Kontrolli lehte: http://linnupeletaja.ee
 
-      - name: Alert lasteaiapildid.ee
+      - name: Teavitus - lasteaiapildid.ee
         if: steps.check.outputs.lasteaiapildid_failed == 'true'
         uses: dawidd6/action-send-mail@v3
         with:
@@ -154,15 +217,17 @@ jobs:
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "[ALERT] lasteaiapildid.ee probleem"
-          to: info@lasteaiapildid.ee,${{ env.TECH_EMAIL }}
+          subject: "⚠️ lasteaiapildid.ee probleem"
+          to: ${{ env.TEST_MODE == 'true' && env.TECH_EMAIL || format('info@lasteaiapildid.ee,{0}', env.TECH_EMAIL) }}
           from: Veebilehtede seire
           body: |
             lasteaiapildid.ee ei toota!
+            
             Pohjus: ${{ steps.check.outputs.lasteaiapildid_reason }}
-            Kontrolli: https://lasteaiapildid.ee
+            
+            Kontrolli lehte: https://lasteaiapildid.ee
 
-      - name: Alert athliit.ee
+      - name: Teavitus - athliit.ee
         if: steps.check.outputs.athliit_failed == 'true'
         uses: dawidd6/action-send-mail@v3
         with:
@@ -170,10 +235,12 @@ jobs:
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "[ALERT] athliit.ee probleem"
-          to: anne.ruusmann@athliit.ee,info@athliit.ee,kerstenkorge@athliit.ee,${{ env.TECH_EMAIL }}
+          subject: "⚠️ athliit.ee probleem"
+          to: ${{ env.TEST_MODE == 'true' && env.TECH_EMAIL || format('anne.ruusmann@athliit.ee,info@athliit.ee,kerstenkorge@athliit.ee,{0}', env.TECH_EMAIL) }}
           from: Veebilehtede seire
           body: |
             athliit.ee ei toota!
+            
             Pohjus: ${{ steps.check.outputs.athliit_reason }}
-            Kontrolli: https://athliit.ee
+            
+            Kontrolli lehte: https://athliit.ee
