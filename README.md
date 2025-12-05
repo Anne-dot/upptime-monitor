@@ -1,75 +1,91 @@
 # Upptime Monitor
 
-Veebilehtede seire GitHub Actions abil.
+Simple website monitoring using GitHub Actions.
 
-## Monitooritavad saidid
+## Purpose
 
-| Sait | Tüüp |
-|------|------|
-| nirgu.ee | PHP |
-| birdbusters.eu | PHP |
-| sharpy.ee | PHP |
-| linnupeletaja.ee | PHP |
-| lasteaiapildid.ee | Staatiline |
-| athliit.ee | PHP |
+Automated uptime monitoring that:
+- Checks websites regularly (every 5-30 minutes)
+- Detects issues (downtime, slow response, PHP errors, SSL expiry)
+- Sends email alerts when problems occur
+- Generates weekly summary reports
 
-## Kontrollid
+Free, serverless, runs entirely on GitHub Actions.
 
-Iga saidi puhul kontrollitakse:
+## What It Monitors
 
-1. **Kättesaadavus** - kas leht vastab 30 sekundi jooksul
-2. **HTTP staatus** - kas tagastab 200 OK
-3. **PHP vead** - kas lehel on Fatal/Parse error või Warning (ainult PHP saitidel)
-4. **Sisu** - kas vastus pole tühi (<500 bytes)
-5. **SSL sertifikaat** - kas aegub rohkem kui 7 päeva pärast
+Each website is checked for:
+
+1. **Availability** - responds within 30 seconds
+2. **HTTP Status** - returns 200 OK
+3. **PHP Errors** - no Fatal/Parse errors or Warnings
+4. **Content** - response is not empty (<500 bytes)
+5. **SSL Certificate** - more than 7 days until expiry
 
 ## Workflows
 
-### v1 (`uptime-check.yml`)
-- **Sagedus:** iga 5 minutit
-- **Struktuur:** 11 paralleelset jobi (maatriks)
-- **Kasutus:** ~11 minutit per run
-- **Sobib:** PUBLIC repole (piiramatu Actions)
+| Workflow | Description | Frequency |
+|----------|-------------|-----------|
+| `uptime-check.yml` | Main monitoring (11 parallel jobs) | Every 5 min |
+| `uptime-check-v2.yml` | Cost-efficient version (1 job) | Every 30 min |
+| `weekly-summary.yml` | Weekly report with stats | Monday 8:00 |
 
-### v2 (`uptime-check-v2.yml`)
-- **Sagedus:** iga 30 minutit (või käsitsi)
-- **Struktuur:** 1 job, järjestikused kontrollid
-- **Kasutus:** ~1 minut per run
-- **Sobib:** PRIVATE repole (säästab minuteid)
+## Setup
 
-### Weekly Summary (`weekly-summary.yml`)
-- **Sagedus:** esmaspäev 8:00 Eesti aeg
-- **Sisu:** saitide kiirused, SSL staatused, nädala intsidendid
-
-## Seadistamine
-
-### Secrets (Settings → Secrets → Actions)
-- `MAIL_USERNAME` - Gmail aadress
-- `MAIL_PASSWORD` - Gmail App Password
-
-### Keskkonnamuutujad (workflow failis)
-```yaml
-env:
-  TEST_MODE: "false"  # true = ainult TECH_EMAIL saab meile
-  TECH_EMAIL: "ruusmann@gmail.com"
+### 1. Secrets (Settings → Secrets → Actions)
+```
+MAIL_USERNAME = your-gmail@address
+MAIL_PASSWORD = gmail-app-password
 ```
 
-## Kasutus
+### 2. Environment Variables (in workflow file)
+```yaml
+env:
+  TEST_MODE: "false"  # true = only TECH_EMAIL receives alerts
+  TECH_EMAIL: "your@email.com"
+```
 
-### Public repo (praegu)
-- v1 aktiivne, iga 5 min
-- Minuteid pole vaja jälgida
+### 3. Adding Sites
 
-### Private repo (tulevikus)
-1. Lülita v1 schedule välja
-2. Lülita v2 schedule sisse
-3. Muuda v2 `TEST_MODE: "false"`
+Edit the `uptime-check.yml` matrix section:
+```yaml
+matrix:
+  site:
+    - url: https://your-site.com
+      name: your-site.com
+      emails: "contact@email.com"
+      is_php: true
+```
 
-## Minutite kasutus (private repo)
+## Public vs Private Repository
 
-GitHub Free annab 2000 min/kuu privaatsetele repodele.
+| Repo Type | Actions Limit | Recommendation |
+|-----------|---------------|----------------|
+| PUBLIC | Unlimited | Use v1 (every 5 min) |
+| PRIVATE | 2000 min/month | Use v2 (every 30 min) |
 
-| Workflow | Min/run | Runs/päev | Min/päev | Kestab |
-|----------|---------|-----------|----------|--------|
-| v1 (5 min) | 11 | 288 | 3168 | ~15h ❌ |
-| v2 (30 min) | 1 | 48 | 48 | ~41 päeva ✅ |
+## Minutes Usage (Private Repo)
+
+GitHub Free tier provides 2000 minutes/month for private repositories.
+
+| Workflow | Min/run | Runs/day | Lasts |
+|----------|---------|----------|-------|
+| v1 (5 min) | 11 | 288 | ~5 days ❌ |
+| v2 (30 min) | 1 | 48 | ~41 days ✅ |
+
+## Features
+
+- **Matrix Strategy** - parallel checks for faster results
+- **Per-site Email Alerts** - each site owner gets only their alerts
+- **SSL Monitoring** - warns before certificates expire
+- **Response Time Tracking** - weekly report shows site speed
+- **Incident Tracking** - weekly report shows failure count
+- **Cost Optimization** - v2 uses 11x fewer GitHub Actions minutes
+
+## Tech Stack
+
+- GitHub Actions (CI/CD)
+- Bash scripting
+- cURL for HTTP checks
+- OpenSSL for certificate checks
+- Gmail SMTP for notifications
