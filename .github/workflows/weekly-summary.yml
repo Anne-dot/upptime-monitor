@@ -51,8 +51,6 @@ jobs:
             end_time=$(date +%s%N)
             
             duration_ms=$(( (end_time - start_time) / 1000000 ))
-            
-            # Teisenda sekunditeks ühe komakohaga (1423ms -> 1,4)
             duration_sec=$(echo "scale=1; $duration_ms / 1000" | bc | sed 's/\./,/')
             
             if [ "$status" = "200" ]; then
@@ -115,65 +113,93 @@ jobs:
           echo "" >> summary.txt
           
           # ============================================
-          # 2. NÄDALA VEAD (iga veebilehe kohta)
+          # 2. NÄDALA VEAD (koos põhjustega)
           # ============================================
           echo "## NÄDALA VEAD" >> summary.txt
           echo "" >> summary.txt
           
           week_ago=$(date -d '7 days ago' -Iseconds)
           
+          # Kogu vead failist
+          rm -f /tmp/errors_detailed.txt
+          touch /tmp/errors_detailed.txt
+          
+          # Saa failed runid
           failed_run_ids=$(gh api "repos/$GITHUB_REPO/actions/runs?status=failure&created=>$week_ago&per_page=100" --jq '.workflow_runs[].id' 2>/dev/null)
           
-          rm -f /tmp/errors.txt
-          touch /tmp/errors.txt
-          
           for run_id in $failed_run_ids; do
-            failed_jobs=$(gh api "repos/$GITHUB_REPO/actions/runs/$run_id/jobs" --jq '.jobs[] | select(.conclusion == "failure") | .name' 2>/dev/null)
+            # Saa run info (aeg)
+            run_time=$(gh api "repos/$GITHUB_REPO/actions/runs/$run_id" --jq '.created_at[0:10]' 2>/dev/null)
             
-            echo "$failed_jobs" | while read job_name; do
+            # Saa failed jobid ja nende annotations
+            failed_jobs=$(gh api "repos/$GITHUB_REPO/actions/runs/$run_id/jobs" --jq '.jobs[] | select(.conclusion == "failure") | {id: .id, name: .name}' 2>/dev/null)
+            
+            echo "$failed_jobs" | jq -c '.' 2>/dev/null | while read job_info; do
+              job_id=$(echo "$job_info" | jq -r '.id')
+              job_name=$(echo "$job_info" | jq -r '.name')
+              
+              # Määra sait nime järgi
+              site=""
               case "$job_name" in
-                *nirgu*) echo "nirgu" >> /tmp/errors.txt ;;
-                *birdbusters*) echo "birdbusters" >> /tmp/errors.txt ;;
-                *sharpy*) echo "sharpy" >> /tmp/errors.txt ;;
-                *linnupeletaja*) echo "linnupeletaja" >> /tmp/errors.txt ;;
-                *lasteaiapildid*) echo "lasteaiapildid" >> /tmp/errors.txt ;;
-                *athliit*) echo "athliit" >> /tmp/errors.txt ;;
+                *nirgu*) site="nirgu.ee" ;;
+                *birdbusters*) site="birdbusters.eu" ;;
+                *sharpy*) site="sharpy.ee" ;;
+                *linnupeletaja*) site="linnupeletaja.ee" ;;
+                *lasteaiapildid*) site="lasteaiapildid.ee" ;;
+                *athliit*) site="athliit.ee" ;;
+                *) site="monitoring" ;;
               esac
+              
+              # Proovi saada vea põhjus annotatsioonidest
+              annotation=$(gh api "repos/$GITHUB_REPO/check-runs/$job_id/annotations" --jq '.[0].message' 2>/dev/null | head -c 50)
+              
+              if [ -z "$annotation" ] || [ "$annotation" = "null" ]; then
+                # Kui annotation puudub, kasuta üldist põhjust
+                if echo "$annotation" | grep -qi "billing\|payment\|spending"; then
+                  reason="billing limit"
+                elif echo "$job_name" | grep -qi "ssl"; then
+                  reason="SSL kontroll"
+                else
+                  reason="HTTP kontroll"
+                fi
+              else
+                # Lühenda annotation
+                reason=$(echo "$annotation" | cut -c1-40)
+              fi
+              
+              echo "$site|$run_time|$reason" >> /tmp/errors_detailed.txt
             done
           done
           
-          nirgu_err=$(grep -c "nirgu" /tmp/errors.txt 2>/dev/null || echo "0")
-          birdbusters_err=$(grep -c "birdbusters" /tmp/errors.txt 2>/dev/null || echo "0")
-          sharpy_err=$(grep -c "sharpy" /tmp/errors.txt 2>/dev/null || echo "0")
-          linnupeletaja_err=$(grep -c "linnupeletaja" /tmp/errors.txt 2>/dev/null || echo "0")
-          lasteaiapildid_err=$(grep -c "lasteaiapildid" /tmp/errors.txt 2>/dev/null || echo "0")
-          athliit_err=$(grep -c "athliit" /tmp/errors.txt 2>/dev/null || echo "0")
-          
-          total_errors=$((nirgu_err + birdbusters_err + sharpy_err + linnupeletaja_err + lasteaiapildid_err + athliit_err))
-          
-          printf "%-20s | %s\n" "Veebileht" "Vead" >> summary.txt
-          printf "%-20s | %s\n" "--------------------" "-----" >> summary.txt
-          
-          print_errors() {
-            local name=$1
-            local count=$2
-            if [ "$count" -gt 0 ]; then
-              printf "%-20s | ⚠️ %s\n" "$name" "$count" >> summary.txt
-            else
-              printf "%-20s | ✅ 0\n" "$name" >> summary.txt
+          # Kui vigu on
+          if [ -s /tmp/errors_detailed.txt ]; then
+            # Grupeeri saidi kaupa
+            for site in "nirgu.ee" "birdbusters.eu" "sharpy.ee" "linnupeletaja.ee" "lasteaiapildid.ee" "athliit.ee"; do
+              site_errors=$(grep "^$site|" /tmp/errors_detailed.txt 2>/dev/null)
+              error_count=$(echo "$site_errors" | grep -c "." 2>/dev/null || echo "0")
+              
+              if [ "$error_count" -gt 0 ] && [ -n "$site_errors" ]; then
+                echo "$site ($error_count viga):" >> summary.txt
+                echo "$site_errors" | head -3 | while IFS='|' read s date reason; do
+                  echo "  - $date: $reason" >> summary.txt
+                done
+                if [ "$error_count" -gt 3 ]; then
+                  echo "  - ... ja veel $((error_count - 3))" >> summary.txt
+                fi
+                echo "" >> summary.txt
+              fi
+            done
+            
+            # Monitoring vead eraldi
+            monitoring_errors=$(grep "^monitoring|" /tmp/errors_detailed.txt 2>/dev/null | wc -l)
+            if [ "$monitoring_errors" -gt 0 ]; then
+              echo "Monitoring vead: $monitoring_errors (billing/süsteem)" >> summary.txt
+              echo "" >> summary.txt
             fi
-          }
-          
-          print_errors "nirgu.ee" "$nirgu_err"
-          print_errors "birdbusters.eu" "$birdbusters_err"
-          print_errors "sharpy.ee" "$sharpy_err"
-          print_errors "linnupeletaja.ee" "$linnupeletaja_err"
-          print_errors "lasteaiapildid.ee" "$lasteaiapildid_err"
-          print_errors "athliit.ee" "$athliit_err"
-          
-          echo "" >> summary.txt
-          echo "Kokku: $total_errors viga viimase 7 päeva jooksul" >> summary.txt
-          echo "" >> summary.txt
+          else
+            echo "✅ Vigu polnud!" >> summary.txt
+            echo "" >> summary.txt
+          fi
           
           # ============================================
           # 3. HOIATUSED (ainult kui on)
@@ -206,6 +232,7 @@ jobs:
           # 5. KOKKUVÕTE
           # ============================================
           echo "---" >> summary.txt
+          total_errors=$(wc -l < /tmp/errors_detailed.txt 2>/dev/null || echo "0")
           if [ "$all_ok" = true ] && [ "$total_errors" -eq 0 ]; then
             echo "✅ KÕIK KORRAS!" >> summary.txt
             echo "status=ok" >> $GITHUB_OUTPUT
