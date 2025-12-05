@@ -5,9 +5,6 @@ on:
     - cron: "0 6 * * 1"  # Esmaspaev kell 6:00 UTC (8:00 Eesti aeg)
   workflow_dispatch:
 
-# ============================================
-# SEADISTUS
-# ============================================
 env:
   TECH_EMAIL: "ruusmann@gmail.com"
   GITHUB_REPO: "Anne-dot/upptime-monitor"
@@ -23,6 +20,15 @@ jobs:
         run: |
           echo "=== IGANADALANE ULEVAADE ===" > summary.txt
           echo "Kuupaev: $(date '+%Y-%m-%d %H:%M') UTC" >> summary.txt
+          echo "" >> summary.txt
+          
+          # ============================================
+          # LEGEND
+          # ============================================
+          echo "## LEGEND" >> summary.txt
+          echo "" >> summary.txt
+          echo "Kiirus: 🟢 <1s | 🟡 1-3s | 🔴 >3s" >> summary.txt
+          echo "SSL:    ✅ >30p | ⚠️ 14-30p | 🔴 <14p" >> summary.txt
           echo "" >> summary.txt
           
           # ============================================
@@ -49,21 +55,17 @@ jobs:
             
             if [ "$status" = "200" ]; then
               if [ $duration_ms -lt 1000 ]; then
-                speed_icon="🚀"
+                speed_icon="🟢"
               elif [ $duration_ms -lt 3000 ]; then
-                speed_icon="✅"
-              elif [ $duration_ms -lt 5000 ]; then
-                speed_icon="⚠️"
-                all_ok=false
+                speed_icon="🟡"
               else
-                speed_icon="🐌"
+                speed_icon="🔴"
                 all_ok=false
               fi
               https_result="$speed_icon ${duration_ms}ms"
             else
               https_result="❌ HTTP $status"
               all_ok=false
-              duration_ms="N/A"
             fi
             
             # SSL kontroll
@@ -81,13 +83,9 @@ jobs:
                   elif [ $days_left -gt 14 ]; then
                     ssl_result="⚠️ ${days_left}p"
                     ssl_warnings="$ssl_warnings\n- $name: $days_left paeva"
-                  elif [ $days_left -gt 7 ]; then
+                  else
                     ssl_result="🔴 ${days_left}p"
                     ssl_warnings="$ssl_warnings\n- $name: $days_left paeva (KIIRE!)"
-                    all_ok=false
-                  else
-                    ssl_result="❌ ${days_left}p"
-                    ssl_warnings="$ssl_warnings\n- $name: $days_left paeva (KRIITILINE!)"
                     all_ok=false
                   fi
                 fi
@@ -127,7 +125,6 @@ jobs:
           echo "## NADALA INTSIDENDID" >> summary.txt
           echo "" >> summary.txt
           
-          # Viimase 7 paeva failed workflow runs
           week_ago=$(date -d '7 days ago' -Iseconds)
           
           failed_runs=$(gh api "repos/$GITHUB_REPO/actions/runs?status=failure&created=>$week_ago" --jq '.total_count' 2>/dev/null || echo "?")
