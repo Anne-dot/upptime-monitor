@@ -25,7 +25,10 @@ jobs:
           # ============================================
           # LEGEND
           # ============================================
-          echo "LEGEND: Kiirus 🚀<0,5s 🟢0,5-1s 🟡1-3s 🔴>3s | SSL ✅>30p ⚠️14-30p 🔴<14p" >> summary.txt
+          echo "LEGEND:" >> summary.txt
+          echo "" >> summary.txt
+          echo "Kiirus   🚀 < 0,5s   🟢 0,5 - 1s   🟡 1 - 3s     🔴 > 3s" >> summary.txt
+          echo "SSL                  🟢 > 30p      🟡 14 - 30p   🔴 < 14p" >> summary.txt
           echo "" >> summary.txt
           
           # ============================================
@@ -80,9 +83,9 @@ jobs:
                 if [ -n "$expiry_epoch" ]; then
                   days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
                   if [ $days_left -gt 30 ]; then
-                    ssl_result="✅ ${days_left}p"
+                    ssl_result="🟢 ${days_left}p"
                   elif [ $days_left -gt 14 ]; then
-                    ssl_result="⚠️ ${days_left}p"
+                    ssl_result="🟡 ${days_left}p"
                     ssl_warnings="$ssl_warnings\n- $name: $days_left päeva"
                   else
                     ssl_result="🔴 ${days_left}p"
@@ -227,7 +230,7 @@ jobs:
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "${{ steps.stats.outputs.status == 'ok' && '✅' || '⚠️' }} Iganädalane ülevaade - Veebilehed"
+          subject: "📊 Veebilehed möödunud nädalal"
           to: ${{ env.TECH_EMAIL }}
           from: Veebilehtede seire
           body: ${{ steps.stats.outputs.SUMMARY }}
