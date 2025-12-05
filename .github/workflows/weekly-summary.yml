@@ -25,20 +25,18 @@ jobs:
           # ============================================
           # LEGEND
           # ============================================
-          echo "## LEGEND" >> summary.txt
-          echo "" >> summary.txt
-          echo "Kiirus: 🟢 <1s | 🟡 1-3s | 🔴 >3s" >> summary.txt
-          echo "SSL:    ✅ >30p | ⚠️ 14-30p | 🔴 <14p" >> summary.txt
+          echo "LEGEND: Kiirus 🟢<1s 🟡1-3s 🔴>3s | SSL ✅>30p ⚠️14-30p 🔴<14p" >> summary.txt
           echo "" >> summary.txt
           
           # ============================================
-          # 1. VEEBILEHTEDE STAATUS JA KIIRUS
+          # 1. VEEBILEHTEDE STAATUS
           # ============================================
           echo "## VEEBILEHTEDE STAATUS" >> summary.txt
           echo "" >> summary.txt
           
           all_ok=true
           ssl_warnings=""
+          slow_sites=""
           
           check_site() {
             local name=$1
@@ -50,7 +48,6 @@ jobs:
             status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 "$url" 2>/dev/null)
             end_time=$(date +%s%N)
             
-            # Arvuta millisekundites
             duration_ms=$(( (end_time - start_time) / 1000000 ))
             
             if [ "$status" = "200" ]; then
@@ -60,6 +57,7 @@ jobs:
                 speed_icon="🟡"
               else
                 speed_icon="🔴"
+                slow_sites="$slow_sites\n- $name: ${duration_ms}ms"
                 all_ok=false
               fi
               https_result="$speed_icon ${duration_ms}ms"
@@ -85,7 +83,7 @@ jobs:
                     ssl_warnings="$ssl_warnings\n- $name: $days_left paeva"
                   else
                     ssl_result="🔴 ${days_left}p"
-                    ssl_warnings="$ssl_warnings\n- $name: $days_left paeva (KIIRE!)"
+                    ssl_warnings="$ssl_warnings\n- $name: $days_left paeva"
                     all_ok=false
                   fi
                 fi
@@ -111,7 +109,7 @@ jobs:
           echo "" >> summary.txt
           
           # ============================================
-          # 2. SSL HOIATUSED
+          # 2. HOIATUSED (ainult kui on)
           # ============================================
           if [ -n "$ssl_warnings" ]; then
             echo "## ⚠️ SSL AEGUB VARSTI" >> summary.txt
@@ -119,54 +117,30 @@ jobs:
             echo "" >> summary.txt
           fi
           
-          # ============================================
-          # 3. NADALA INTSIDENDID
-          # ============================================
-          echo "## NADALA INTSIDENDID" >> summary.txt
-          echo "" >> summary.txt
-          
-          week_ago=$(date -d '7 days ago' -Iseconds)
-          
-          failed_runs=$(gh api "repos/$GITHUB_REPO/actions/runs?status=failure&created=>$week_ago" --jq '.total_count' 2>/dev/null || echo "?")
-          success_runs=$(gh api "repos/$GITHUB_REPO/actions/runs?status=success&created=>$week_ago" --jq '.total_count' 2>/dev/null || echo "?")
-          
-          if [ "$failed_runs" != "?" ] && [ "$success_runs" != "?" ]; then
-            total_runs=$((failed_runs + success_runs))
-            if [ $total_runs -gt 0 ]; then
-              uptime_pct=$(( (success_runs * 100) / total_runs ))
-            else
-              uptime_pct=100
-            fi
-            
-            echo "Edukad kontrollid: $success_runs" >> summary.txt
-            echo "Ebaonnestunud:     $failed_runs" >> summary.txt
-            echo "Uptime:            ${uptime_pct}%" >> summary.txt
-          else
-            echo "Statistika pole saadaval" >> summary.txt
+          if [ -n "$slow_sites" ]; then
+            echo "## 🐌 AEGLASED LEHED" >> summary.txt
+            echo -e "$slow_sites" >> summary.txt
+            echo "" >> summary.txt
           fi
           
-          echo "" >> summary.txt
-          
           # ============================================
-          # 4. GITHUB ACTIONS KASUTUS
+          # 3. REPO STAATUS
           # ============================================
-          echo "## ACTIONS KASUTUS" >> summary.txt
+          echo "## REPO STAATUS" >> summary.txt
           echo "" >> summary.txt
           
           visibility=$(gh api "repos/$GITHUB_REPO" --jq '.visibility' 2>/dev/null || echo "unknown")
           
           if [ "$visibility" = "private" ]; then
-            echo "Repo: PRIVATE (minutid loevad!)" >> summary.txt
-            echo "NB: Kontrolli kasutust: github.com/settings/billing" >> summary.txt
+            echo "⚠️ PRIVATE - jälgi minuteid: github.com/settings/billing" >> summary.txt
           else
-            echo "Repo: PUBLIC (piiramatu Actions)" >> summary.txt
-            echo "Minuteid ei pea jalgima." >> summary.txt
+            echo "✅ PUBLIC - piiramatu Actions" >> summary.txt
           fi
           
           echo "" >> summary.txt
           
           # ============================================
-          # 5. KOKKUVOTE
+          # 4. KOKKUVOTE
           # ============================================
           echo "---" >> summary.txt
           if [ "$all_ok" = true ]; then
