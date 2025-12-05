@@ -44,7 +44,7 @@ jobs:
             name: linnupeletaja.ee
             emails: "info@nirgu.ee"
             is_php: true
-          - url: https://lasteaiapildid.ee
+          - url: https://lasteaiapildid.ee/this-page-does-not-exist-404-test
             name: lasteaiapildid.ee
             emails: "info@lasteaiapildid.ee"
             is_php: false  # Staatiline Astro leht
