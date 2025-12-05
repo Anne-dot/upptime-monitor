@@ -51,8 +51,13 @@ jobs:
       - name: Check ${{ matrix.site.name }}
         id: check
         run: |
+          site_name="${{ matrix.site.name }}"
           error_reason=""
           error_detail=""
+          
+          echo "========================================"
+          echo "Kontrollin: $site_name"
+          echo "========================================"
           
           # ----------------------------------------
           # 1. LEHE LAADIMINE (timeout 30 sek)
@@ -60,7 +65,10 @@ jobs:
           if ! response=$(curl -sL --max-time 30 "${{ matrix.site.url }}" 2>&1); then
             error_reason="Leht ei laadinud 30 sekundi jooksul"
             error_detail="Timeout or connection failed"
+            echo "❌ $site_name: Timeout"
           else
+            echo "✅ $site_name: Leht laadis"
+            
             # ----------------------------------------
             # 2. HTTP STAATUSKOODI KONTROLL
             # ----------------------------------------
@@ -69,31 +77,46 @@ jobs:
             if [ "$status" != "200" ]; then
               error_reason="Server tagastas vea"
               error_detail="HTTP status: $status"
+              echo "❌ $site_name: HTTP $status"
+            else
+              echo "✅ $site_name: HTTP $status"
             
-            # ----------------------------------------
-            # 3. PHP VIGADE KONTROLL
-            # ----------------------------------------
-            elif echo "$response" | grep -qiE "(Fatal error|Parse error|Warning:|Exception)"; then
-              error_reason="PHP viga lehel"
-              error_detail="Fatal error, Parse error või Warning leitud"
-            
-            # ----------------------------------------
-            # 4. TÜHJA VASTUSE KONTROLL
-            # ----------------------------------------
-            elif [ ${#response} -lt 500 ]; then
-              error_reason="Leht on tühi või liiga lühike"
-              error_detail="Response size: ${#response} bytes"
+              # ----------------------------------------
+              # 3. PHP VIGADE KONTROLL
+              # ----------------------------------------
+              if echo "$response" | grep -qiE "(Fatal error|Parse error|Warning:|Exception)"; then
+                error_reason="PHP viga lehel"
+                error_detail="Fatal error, Parse error või Warning leitud"
+                echo "❌ $site_name: PHP viga leitud"
+              else
+                echo "✅ $site_name: PHP vigu pole"
+              
+                # ----------------------------------------
+                # 4. TÜHJA VASTUSE KONTROLL
+                # ----------------------------------------
+                response_size=${#response}
+                if [ $response_size -lt 500 ]; then
+                  error_reason="Leht on tühi või liiga lühike"
+                  error_detail="Response size: $response_size bytes"
+                  echo "❌ $site_name: Vastus liiga lühike ($response_size bytes)"
+                else
+                  echo "✅ $site_name: Vastus OK ($response_size bytes)"
+                fi
+              fi
             fi
           fi
+          
+          echo "========================================"
           
           # Salvesta tulemused
           if [ -n "$error_reason" ]; then
             echo "error_reason=$error_reason" >> $GITHUB_OUTPUT
             echo "error_detail=$error_detail" >> $GITHUB_OUTPUT
+            echo "❌ $site_name: EBAÕNNESTUS"
             exit 1
           fi
           
-          echo "${{ matrix.site.name }}: OK"
+          echo "✅ $site_name: KÕIK OK"
 
       - name: Send alert email
         if: failure()
@@ -140,13 +163,27 @@ jobs:
       - name: Check ${{ matrix.site.host }} SSL
         id: check
         run: |
-          expiry=$(echo | openssl s_client -connect ${{ matrix.site.host }}:443 -servername ${{ matrix.site.host }} 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
+          site_host="${{ matrix.site.host }}"
+          
+          echo "========================================"
+          echo "SSL kontroll: $site_host"
+          echo "========================================"
+          
+          expiry=$(echo | openssl s_client -connect $site_host:443 -servername $site_host 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
           expiry_epoch=$(date -d "$expiry" +%s)
           now_epoch=$(date +%s)
           days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
-          echo "${{ matrix.site.host }} SSL: $days_left päeva jäänud"
+          
           echo "days_left=$days_left" >> $GITHUB_OUTPUT
-          [ $days_left -gt 7 ] || exit 1
+          
+          if [ $days_left -gt 7 ]; then
+            echo "✅ $site_host: SSL OK ($days_left päeva jäänud)"
+          else
+            echo "❌ $site_host: SSL aegub! ($days_left päeva jäänud)"
+            exit 1
+          fi
+          
+          echo "========================================"
 
       - name: Send alert email
         if: failure()
