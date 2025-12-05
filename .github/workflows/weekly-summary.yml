@@ -25,7 +25,7 @@ jobs:
           # ============================================
           # LEGEND
           # ============================================
-          echo "LEGEND: Kiirus 🟢<1s 🟡1-3s 🔴>3s | SSL ✅>30p ⚠️14-30p 🔴<14p" >> summary.txt
+          echo "LEGEND: Kiirus 🚀<0,5s 🟢0,5-1s 🟡1-3s 🔴>3s | SSL ✅>30p ⚠️14-30p 🔴<14p" >> summary.txt
           echo "" >> summary.txt
           
           # ============================================
@@ -49,17 +49,22 @@ jobs:
             
             duration_ms=$(( (end_time - start_time) / 1000000 ))
             
+            # Teisenda sekunditeks ühe komakohaga (1423ms -> 1,4)
+            duration_sec=$(echo "scale=1; $duration_ms / 1000" | bc | sed 's/\./,/')
+            
             if [ "$status" = "200" ]; then
-              if [ $duration_ms -lt 1000 ]; then
+              if [ $duration_ms -lt 500 ]; then
+                speed_icon="🚀"
+              elif [ $duration_ms -lt 1000 ]; then
                 speed_icon="🟢"
               elif [ $duration_ms -lt 3000 ]; then
                 speed_icon="🟡"
               else
                 speed_icon="🔴"
-                slow_sites="$slow_sites\n- $name: ${duration_ms}ms"
+                slow_sites="$slow_sites\n- $name: ${duration_sec}s"
                 all_ok=false
               fi
-              https_result="$speed_icon ${duration_ms}ms"
+              https_result="$speed_icon ${duration_sec}s"
             else
               https_result="❌ HTTP $status"
               all_ok=false
@@ -91,11 +96,11 @@ jobs:
               fi
             fi
             
-            printf "%-20s | %-15s | %s\n" "$name" "$https_result" "$ssl_result" >> summary.txt
+            printf "%-20s | %-12s | %s\n" "$name" "$https_result" "$ssl_result" >> summary.txt
           }
           
-          printf "%-20s | %-15s | %s\n" "Veebileht" "Kiirus" "SSL" >> summary.txt
-          printf "%-20s | %-15s | %s\n" "--------------------" "---------------" "--------" >> summary.txt
+          printf "%-20s | %-12s | %s\n" "Veebileht" "Kiirus (s)" "SSL" >> summary.txt
+          printf "%-20s | %-12s | %s\n" "--------------------" "------------" "--------" >> summary.txt
           
           check_site "nirgu.ee" "https://nirgu.ee" "true"
           check_site "birdbusters.eu" "https://birdbusters.eu" "true"
