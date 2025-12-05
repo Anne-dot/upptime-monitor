@@ -1,0 +1,58 @@
+[
+  {
+    "name": "nirgu.ee",
+    "url": "https://nirgu.ee",
+    "ssl": true,
+    "is_php": true,
+    "emails": "info@nirgu.ee"
+  },
+  {
+    "name": "birdbusters.eu",
+    "url": "https://birdbusters.eu",
+    "ssl": true,
+    "is_php": true,
+    "emails": "info@birdbusters.eu"
+  },
+  {
+    "name": "sharpy.ee",
+    "url": "https://sharpy.ee",
+    "ssl": true,
+    "is_php": true,
+    "emails": "info@sharpy.ee"
+  },
+  {
+    "name": "linnupeletaja.ee",
+    "url": "http://linnupeletaja.ee",
+    "ssl": false,
+    "is_php": true,
+    "emails": "info@nirgu.ee"
+  },
+  {
+    "name": "lasteaiapildid.ee",
+    "url": "https://lasteaiapildid.ee",
+    "ssl": true,
+    "is_php": false,
+    "emails": "info@lasteaiapildid.ee"
+  },
+  {
+    "name": "athliit.ee",
+    "url": "https://athliit.ee",
+    "ssl": true,
+    "is_php": true,
+    "emails": "anne.ruusmann@athliit.ee,info@athliit.ee,kerstenkorge@athliit.ee"
+  },
+  {
+    "name": "24-7fitness.ee",
+    "url": "https://24-7fitness.ee",
+    "ssl": true,
+    "is_php": true,
+    "emails": ""
+  },
+  {
+    "name": "pillimaailm.ee",
+    "url": "http://www.pillimaailm.ee",
+    "ssl": false,
+    "is_php": true,
+    "emails": ""
+  }
+]
