@@ -19,7 +19,7 @@ jobs:
   # Kontrollib:
   # 1. Kas leht vastab (timeout 30 sek)
   # 2. Kas HTTP staatus on 200
-  # 3. Kas lehel pole PHP vigu (Fatal error jne)
+  # 3. Kas lehel pole PHP vigu (ainult PHP lehtedel)
   # 4. Kas vastus pole tühi
   # ============================================
   check-https:
@@ -31,27 +31,34 @@ jobs:
           - url: https://nirgu.ee
             name: nirgu.ee
             emails: "info@nirgu.ee"
+            is_php: true
           - url: https://birdbusters.eu
             name: birdbusters.eu
             emails: "info@birdbusters.eu"
+            is_php: true
           - url: https://sharpy.ee
             name: sharpy.ee
             emails: "info@sharpy.ee"
+            is_php: true
           - url: http://linnupeletaja.ee  # NB: HTTP, mitte HTTPS (Netpro SSL probleem)
             name: linnupeletaja.ee
             emails: "info@nirgu.ee"
+            is_php: true
           - url: https://lasteaiapildid.ee
             name: lasteaiapildid.ee
             emails: "info@lasteaiapildid.ee"
+            is_php: false  # Staatiline Astro leht
           - url: https://athliit.ee
             name: athliit.ee
             emails: "anne.ruusmann@athliit.ee,info@athliit.ee,kerstenkorge@athliit.ee"
+            is_php: true
 
     steps:
       - name: Check ${{ matrix.site.name }}
         id: check
         run: |
           site_name="${{ matrix.site.name }}"
+          is_php="${{ matrix.site.is_php }}"
           error_reason=""
           error_detail=""
           
@@ -82,18 +89,24 @@ jobs:
               echo "✅ $site_name: HTTP $status"
             
               # ----------------------------------------
-              # 3. PHP VIGADE KONTROLL
+              # 3. PHP VIGADE KONTROLL (ainult PHP lehtedel)
               # ----------------------------------------
-              if echo "$response" | grep -qiE "(Fatal error|Parse error|Warning:|Exception)"; then
-                error_reason="PHP viga lehel"
-                error_detail="Fatal error, Parse error või Warning leitud"
-                echo "❌ $site_name: PHP viga leitud"
+              if [ "$is_php" = "true" ]; then
+                if echo "$response" | grep -qiE "(Fatal error|Parse error|Warning:|Exception)"; then
+                  error_reason="PHP viga lehel"
+                  error_detail="Fatal error, Parse error või Warning leitud"
+                  echo "❌ $site_name: PHP viga leitud"
+                else
+                  echo "✅ $site_name: PHP vigu pole"
+                fi
               else
-                echo "✅ $site_name: PHP vigu pole"
+                echo "ℹ️ $site_name: Staatiline leht, PHP kontrolli pole"
+              fi
               
-                # ----------------------------------------
-                # 4. TÜHJA VASTUSE KONTROLL
-                # ----------------------------------------
+              # ----------------------------------------
+              # 4. TÜHJA VASTUSE KONTROLL
+              # ----------------------------------------
+              if [ -z "$error_reason" ]; then
                 response_size=${#response}
                 if [ $response_size -lt 500 ]; then
                   error_reason="Leht on tühi või liiga lühike"
