@@ -2,109 +2,204 @@ name: Weekly Summary
 
 on:
   schedule:
-    - cron: "0 6 * * 1"  # Esmaspäev kell 6:00 UTC (8:00 Eesti aeg)
+    - cron: "0 6 * * 1"  # Esmaspaev kell 6:00 UTC (8:00 Eesti aeg)
   workflow_dispatch:
 
 # ============================================
 # SEADISTUS
 # ============================================
 env:
-  TEST_MODE: "false"
   TECH_EMAIL: "ruusmann@gmail.com"
-# ============================================
+  GITHUB_REPO: "Anne-dot/upptime-monitor"
 
 jobs:
   summary:
     runs-on: ubuntu-latest
     steps:
-      - name: Check all sites
-        id: check
+      - name: Kogu nadalastatistika
+        id: stats
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          echo "=== SALU OÜ veebilehtede nädalakokkuvõte ===" > summary.txt
-          echo "Kuupäev: $(date '+%Y-%m-%d %H:%M') UTC" >> summary.txt
+          echo "=== NADALAKOKKUVOTE ===" > summary.txt
+          echo "Kuupaev: $(date '+%Y-%m-%d %H:%M') UTC" >> summary.txt
           echo "" >> summary.txt
-
+          
+          # ============================================
+          # 1. SAITIDE STAATUS JA KIIRUS
+          # ============================================
+          echo "## SAITIDE STAATUS" >> summary.txt
+          echo "" >> summary.txt
+          
           all_ok=true
-
+          ssl_warnings=""
+          
           check_site() {
-            local site=$1
-            local skip_ssl=$2
-
-            # HTTPS check
-            if [ "$skip_ssl" = "true" ]; then
-              status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 -k "https://$site")
-            else
-              status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 "https://$site")
-            fi
-
+            local name=$1
+            local url=$2
+            local check_ssl=$3
+            
+            # Moot vastamise aega
+            start_time=$(date +%s%N)
+            status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 "$url" 2>/dev/null)
+            end_time=$(date +%s%N)
+            
+            # Arvuta millisekundites
+            duration_ms=$(( (end_time - start_time) / 1000000 ))
+            
             if [ "$status" = "200" ]; then
-              https_status="✅"
-            else
-              https_status="❌ ($status)"
-              all_ok=false
-            fi
-
-            # SSL check
-            ssl_info=$(echo | openssl s_client -connect "$site:443" -servername "$site" 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
-            if [ -n "$ssl_info" ]; then
-              expiry_epoch=$(date -d "$ssl_info" +%s 2>/dev/null)
-              now_epoch=$(date +%s)
-              if [ -n "$expiry_epoch" ]; then
-                days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
-                if [ $days_left -gt 14 ]; then
-                  ssl_status="✅ ($days_left p)"
-                elif [ $days_left -gt 7 ]; then
-                  ssl_status="⚠️ ($days_left p)"
-                  all_ok=false
-                else
-                  ssl_status="❌ ($days_left p)"
-                  all_ok=false
-                fi
+              if [ $duration_ms -lt 1000 ]; then
+                speed_icon="🚀"
+              elif [ $duration_ms -lt 3000 ]; then
+                speed_icon="✅"
+              elif [ $duration_ms -lt 5000 ]; then
+                speed_icon="⚠️"
+                all_ok=false
               else
-                ssl_status="❌"
+                speed_icon="🐌"
                 all_ok=false
               fi
+              https_result="$speed_icon ${duration_ms}ms"
             else
-              ssl_status="❌ puudub"
+              https_result="❌ HTTP $status"
               all_ok=false
+              duration_ms="N/A"
             fi
-
-            echo "$site: HTTPS $https_status | SSL $ssl_status" >> summary.txt
+            
+            # SSL kontroll
+            ssl_result="-"
+            if [ "$check_ssl" = "true" ]; then
+              host=$(echo "$url" | sed 's|https://||' | sed 's|/.*||')
+              ssl_info=$(echo | openssl s_client -connect "$host:443" -servername "$host" 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
+              if [ -n "$ssl_info" ]; then
+                expiry_epoch=$(date -d "$ssl_info" +%s 2>/dev/null)
+                now_epoch=$(date +%s)
+                if [ -n "$expiry_epoch" ]; then
+                  days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
+                  if [ $days_left -gt 30 ]; then
+                    ssl_result="✅ ${days_left}p"
+                  elif [ $days_left -gt 14 ]; then
+                    ssl_result="⚠️ ${days_left}p"
+                    ssl_warnings="$ssl_warnings\n- $name: $days_left paeva"
+                  elif [ $days_left -gt 7 ]; then
+                    ssl_result="🔴 ${days_left}p"
+                    ssl_warnings="$ssl_warnings\n- $name: $days_left paeva (KIIRE!)"
+                    all_ok=false
+                  else
+                    ssl_result="❌ ${days_left}p"
+                    ssl_warnings="$ssl_warnings\n- $name: $days_left paeva (KRIITILINE!)"
+                    all_ok=false
+                  fi
+                fi
+              else
+                ssl_result="❌"
+                all_ok=false
+              fi
+            fi
+            
+            printf "%-20s | %-15s | %s\n" "$name" "$https_result" "$ssl_result" >> summary.txt
           }
-
-          check_site "nirgu.ee" "false"
-          check_site "birdbusters.eu" "false"
-          check_site "sharpy.ee" "false"
-          check_site "linnupeletaja.ee" "false"
-
+          
+          printf "%-20s | %-15s | %s\n" "Sait" "Kiirus" "SSL" >> summary.txt
+          printf "%-20s | %-15s | %s\n" "--------------------" "---------------" "--------" >> summary.txt
+          
+          check_site "nirgu.ee" "https://nirgu.ee" "true"
+          check_site "birdbusters.eu" "https://birdbusters.eu" "true"
+          check_site "sharpy.ee" "https://sharpy.ee" "true"
+          check_site "linnupeletaja.ee" "http://linnupeletaja.ee" "false"
+          check_site "lasteaiapildid.ee" "https://lasteaiapildid.ee" "true"
+          check_site "athliit.ee" "https://athliit.ee" "true"
+          
           echo "" >> summary.txt
+          
+          # ============================================
+          # 2. SSL HOIATUSED
+          # ============================================
+          if [ -n "$ssl_warnings" ]; then
+            echo "## ⚠️ SSL AEGUB VARSTI" >> summary.txt
+            echo -e "$ssl_warnings" >> summary.txt
+            echo "" >> summary.txt
+          fi
+          
+          # ============================================
+          # 3. NADALA INTSIDENDID
+          # ============================================
+          echo "## NADALA INTSIDENDID" >> summary.txt
+          echo "" >> summary.txt
+          
+          # Viimase 7 paeva failed workflow runs
+          week_ago=$(date -d '7 days ago' -Iseconds)
+          
+          # Proovi saada workflow runs
+          failed_runs=$(gh api "repos/$GITHUB_REPO/actions/runs?status=failure&created=>$week_ago" --jq '.total_count' 2>/dev/null || echo "?")
+          success_runs=$(gh api "repos/$GITHUB_REPO/actions/runs?status=success&created=>$week_ago" --jq '.total_count' 2>/dev/null || echo "?")
+          
+          if [ "$failed_runs" != "?" ] && [ "$success_runs" != "?" ]; then
+            total_runs=$((failed_runs + success_runs))
+            if [ $total_runs -gt 0 ]; then
+              uptime_pct=$(( (success_runs * 100) / total_runs ))
+            else
+              uptime_pct=100
+            fi
+            
+            echo "Edukad kontrollid: $success_runs" >> summary.txt
+            echo "Ebaonnestunud:     $failed_runs" >> summary.txt
+            echo "Uptime:            ${uptime_pct}%" >> summary.txt
+          else
+            echo "Statistika pole saadaval" >> summary.txt
+          fi
+          
+          echo "" >> summary.txt
+          
+          # ============================================
+          # 4. GITHUB ACTIONS KASUTUS (private repo jaoks)
+          # ============================================
+          echo "## ACTIONS KASUTUS" >> summary.txt
+          echo "" >> summary.txt
+          
+          # Kontrolli kas repo on private
+          visibility=$(gh api "repos/$GITHUB_REPO" --jq '.visibility' 2>/dev/null || echo "unknown")
+          
+          if [ "$visibility" = "private" ]; then
+            echo "Repo: PRIVATE (minutid loevad!)" >> summary.txt
+            echo "NB: Kontrolli kasutust: github.com/settings/billing" >> summary.txt
+          else
+            echo "Repo: PUBLIC (piiramatu Actions)" >> summary.txt
+            echo "Minuteid ei pea jalgima." >> summary.txt
+          fi
+          
+          echo "" >> summary.txt
+          
+          # ============================================
+          # 5. KOKKUVOTE
+          # ============================================
+          echo "---" >> summary.txt
           if [ "$all_ok" = true ]; then
-            echo "✅ Kõik korras!" >> summary.txt
+            echo "✅ KOIK KORRAS!" >> summary.txt
             echo "status=ok" >> $GITHUB_OUTPUT
           else
-            echo "⚠️ Mõned probleemid vajavad tähelepanu" >> summary.txt
+            echo "⚠️ VAJAVAD TAHELEPANU - vaata ulevalpool" >> summary.txt
             echo "status=issues" >> $GITHUB_OUTPUT
           fi
-
+          
           echo "" >> summary.txt
-          echo "---" >> summary.txt
-          echo "Automaatne kontroll: https://github.com/Anne-dot/upptime-monitor" >> summary.txt
-
+          echo "Monitor: https://github.com/$GITHUB_REPO" >> summary.txt
+          
           cat summary.txt
-
+          
           # Save for email
           echo 'SUMMARY<<EOF' >> $GITHUB_OUTPUT
           cat summary.txt >> $GITHUB_OUTPUT
           echo 'EOF' >> $GITHUB_OUTPUT
 
-      - name: Send summary email
+      - name: Saada kokkuvote meil
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "${{ steps.check.outputs.status == 'ok' && '✅' || '⚠️' }} Nädalakokkuvõte - SALU OÜ veebilehed"
+          subject: "${{ steps.stats.outputs.status == 'ok' && '✅' || '⚠️' }} Nadalakokkuvote - Veebilehed"
           to: ${{ env.TECH_EMAIL }}
           from: Veebilehtede seire
-          body: ${{ steps.check.outputs.SUMMARY }}
+          body: ${{ steps.stats.outputs.SUMMARY }}
