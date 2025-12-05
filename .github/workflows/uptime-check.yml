@@ -20,6 +20,8 @@ env:
   BIRDBUSTERS_EMAILS: "info@birdbusters.eu"
   SHARPY_EMAILS: "info@sharpy.ee"
   LINNUPELETAJA_EMAILS: "info@nirgu.ee"
+  LASTEAIAPILDID_EMAILS: "info@lasteaiapildid.ee"
+  ATHLIIT_EMAILS: "anne.ruusmann@athliit.ee,info@athliit.ee,kerstenkorge@athliit.ee"
 # ============================================
 
 jobs:
@@ -200,12 +202,19 @@ jobs:
 
             Uuenda sertifikaati: https://zone.ee
 
-  linnupeletaja-https:
+  # ============================================
+  # linnupeletaja.ee - Netpro hosting
+  # NB: Kontrollime ainult HTTP, mitte HTTPS!
+  # SSL on problemaatiline (vale sertifikaat: server5.netpro.ee)
+  # ============================================
+  linnupeletaja-http:
     runs-on: ubuntu-latest
     steps:
       - name: Check linnupeletaja.ee HTTP
         id: check
         run: |
+          # NB: Tahtlikult HTTP, mitte HTTPS!
+          # Netpro hostingus on SSL sertifikaat vale domeeniga
           status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 http://linnupeletaja.ee)
           echo "linnupeletaja.ee HTTP: $status"
           echo "status=$status" >> $GITHUB_OUTPUT
@@ -218,7 +227,7 @@ jobs:
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "⚠️ linnupeletaja.ee HTTPS probleem"
+          subject: "⚠️ linnupeletaja.ee ei vasta"
           to: ${{ env.TEST_MODE == 'true' && env.TECH_EMAIL || format('{0},{1}', env.LINNUPELETAJA_EMAILS, env.TECH_EMAIL) }}
           from: Veebilehtede seire
           body: |
@@ -226,27 +235,62 @@ jobs:
 
             HTTP staatus: ${{ steps.check.outputs.status }}
 
-            Kontrolli lehte: https://linnupeletaja.ee
+            Kontrolli lehte: http://linnupeletaja.ee
 
-  linnupeletaja-ssl:
+  # ============================================
+  # linnupeletaja-ssl VÄLJA LÜLITATUD
+  # Põhjus: Netpro hostingus on SSL sertifikaat vale domeeniga
+  # (server5.netpro.ee sert, mitte linnupeletaja.ee)
+  # Lülitame tagasi sisse kui hosting vahetatud Zone'i
+  # ============================================
+  # linnupeletaja-ssl:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Check linnupeletaja.ee SSL
+  #       id: check
+  #       run: |
+  #         if echo | openssl s_client -connect linnupeletaja.ee:443 -servername linnupeletaja.ee 2>/dev/null | openssl x509 -noout -dates; then
+  #           expiry=$(echo | openssl s_client -connect linnupeletaja.ee:443 -servername linnupeletaja.ee 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
+  #           expiry_epoch=$(date -d "$expiry" +%s)
+  #           now_epoch=$(date +%s)
+  #           days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
+  #           echo "linnupeletaja.ee SSL expires in $days_left days"
+  #           echo "days_left=$days_left" >> $GITHUB_OUTPUT
+  #           [ $days_left -gt 7 ] || exit 1
+  #         else
+  #           echo "SSL certificate check failed"
+  #           echo "days_left=INVALID" >> $GITHUB_OUTPUT
+  #           exit 1
+  #         fi
+  #     - name: Send alert email
+  #       if: failure()
+  #       uses: dawidd6/action-send-mail@v3
+  #       with:
+  #         server_address: smtp.gmail.com
+  #         server_port: 465
+  #         username: ${{ secrets.MAIL_USERNAME }}
+  #         password: ${{ secrets.MAIL_PASSWORD }}
+  #         subject: "⚠️ linnupeletaja.ee SSL probleem"
+  #         to: ${{ env.TEST_MODE == 'true' && env.TECH_EMAIL || format('{0},{1}', env.LINNUPELETAJA_EMAILS, env.TECH_EMAIL) }}
+  #         from: Veebilehtede seire
+  #         body: |
+  #           linnupeletaja.ee SSL sertifikaadiga on probleem!
+  #
+  #           Staatus: ${{ steps.check.outputs.days_left }}
+
+  # ============================================
+  # lasteaiapildid.ee
+  # ============================================
+  lasteaiapildid-https:
     runs-on: ubuntu-latest
     steps:
-      - name: Check linnupeletaja.ee SSL
+      - name: Check lasteaiapildid.ee HTTPS
         id: check
         run: |
-          if echo | openssl s_client -connect linnupeletaja.ee:443 -servername linnupeletaja.ee 2>/dev/null | openssl x509 -noout -dates; then
-            expiry=$(echo | openssl s_client -connect linnupeletaja.ee:443 -servername linnupeletaja.ee 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
-            expiry_epoch=$(date -d "$expiry" +%s)
-            now_epoch=$(date +%s)
-            days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
-            echo "linnupeletaja.ee SSL expires in $days_left days"
-            echo "days_left=$days_left" >> $GITHUB_OUTPUT
-            [ $days_left -gt 7 ] || exit 1
-          else
-            echo "SSL certificate check failed"
-            echo "days_left=INVALID" >> $GITHUB_OUTPUT
-            exit 1
-          fi
+          status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 https://lasteaiapildid.ee)
+          echo "lasteaiapildid.ee HTTPS: $status"
+          echo "status=$status" >> $GITHUB_OUTPUT
+          [ "$status" = "200" ] || exit 1
       - name: Send alert email
         if: failure()
         uses: dawidd6/action-send-mail@v3
@@ -255,10 +299,101 @@ jobs:
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "⚠️ linnupeletaja.ee SSL probleem"
-          to: ${{ env.TEST_MODE == 'true' && env.TECH_EMAIL || format('{0},{1}', env.LINNUPELETAJA_EMAILS, env.TECH_EMAIL) }}
+          subject: "⚠️ lasteaiapildid.ee HTTPS probleem"
+          to: ${{ env.TEST_MODE == 'true' && env.TECH_EMAIL || format('{0},{1}', env.LASTEAIAPILDID_EMAILS, env.TECH_EMAIL) }}
           from: Veebilehtede seire
           body: |
-            linnupeletaja.ee SSL sertifikaadiga on probleem!
+            lasteaiapildid.ee ei vasta või tagastas vea.
 
-            Staatus: ${{ steps.check.outputs.days_left }}
+            HTTP staatus: ${{ steps.check.outputs.status }}
+
+            Kontrolli lehte: https://lasteaiapildid.ee
+
+  lasteaiapildid-ssl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check lasteaiapildid.ee SSL
+        id: check
+        run: |
+          expiry=$(echo | openssl s_client -connect lasteaiapildid.ee:443 -servername lasteaiapildid.ee 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
+          expiry_epoch=$(date -d "$expiry" +%s)
+          now_epoch=$(date +%s)
+          days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
+          echo "lasteaiapildid.ee SSL expires in $days_left days"
+          echo "days_left=$days_left" >> $GITHUB_OUTPUT
+          [ $days_left -gt 7 ] || exit 1
+      - name: Send alert email
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "⚠️ lasteaiapildid.ee SSL sertifikaat aegub!"
+          to: ${{ env.TEST_MODE == 'true' && env.TECH_EMAIL || format('{0},{1}', env.LASTEAIAPILDID_EMAILS, env.TECH_EMAIL) }}
+          from: Veebilehtede seire
+          body: |
+            lasteaiapildid.ee SSL sertifikaat aegub varsti!
+
+            Päevi jäänud: ${{ steps.check.outputs.days_left }}
+
+  # ============================================
+  # athliit.ee
+  # ============================================
+  athliit-https:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check athliit.ee HTTPS
+        id: check
+        run: |
+          status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 https://athliit.ee)
+          echo "athliit.ee HTTPS: $status"
+          echo "status=$status" >> $GITHUB_OUTPUT
+          [ "$status" = "200" ] || exit 1
+      - name: Send alert email
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "⚠️ athliit.ee HTTPS probleem"
+          to: ${{ env.TEST_MODE == 'true' && env.TECH_EMAIL || format('{0},{1}', env.ATHLIIT_EMAILS, env.TECH_EMAIL) }}
+          from: Veebilehtede seire
+          body: |
+            athliit.ee ei vasta või tagastas vea.
+
+            HTTP staatus: ${{ steps.check.outputs.status }}
+
+            Kontrolli lehte: https://athliit.ee
+
+  athliit-ssl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check athliit.ee SSL
+        id: check
+        run: |
+          expiry=$(echo | openssl s_client -connect athliit.ee:443 -servername athliit.ee 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
+          expiry_epoch=$(date -d "$expiry" +%s)
+          now_epoch=$(date +%s)
+          days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
+          echo "athliit.ee SSL expires in $days_left days"
+          echo "days_left=$days_left" >> $GITHUB_OUTPUT
+          [ $days_left -gt 7 ] || exit 1
+      - name: Send alert email
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "⚠️ athliit.ee SSL sertifikaat aegub!"
+          to: ${{ env.TEST_MODE == 'true' && env.TECH_EMAIL || format('{0},{1}', env.ATHLIIT_EMAILS, env.TECH_EMAIL) }}
+          from: Veebilehtede seire
+          body: |
+            athliit.ee SSL sertifikaat aegub varsti!
+
+            Päevi jäänud: ${{ steps.check.outputs.days_left }}
