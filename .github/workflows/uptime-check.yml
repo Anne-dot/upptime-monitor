@@ -1,8 +1,8 @@
 name: Uptime Check
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"
+  # schedule:  # DISABLED - kasuta v2
+    # - cron: "*/5 * * * *"
   workflow_dispatch:
 
 # ============================================
