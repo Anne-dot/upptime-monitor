@@ -130,6 +130,8 @@ jobs:
           check_site "linnupeletaja.ee" "http://linnupeletaja.ee" "false"
           check_site "lasteaiapildid.ee" "https://lasteaiapildid.ee" "true"
           check_site "athliit.ee" "https://athliit.ee" "true"
+          check_site "24-7fitness.ee" "https://24-7fitness.ee" "true"
+          check_site "pillimaailm.ee" "http://www.pillimaailm.ee" "false"
 
           echo "</table>" >> summary.html
 
@@ -160,6 +162,8 @@ jobs:
                 *linnupeletaja*) site="linnupeletaja.ee" ;;
                 *lasteaiapildid*) site="lasteaiapildid.ee" ;;
                 *athliit*) site="athliit.ee" ;;
+                *24-7fitness*|*fitness*) site="24-7fitness.ee" ;;
+                *pillimaailm*) site="pillimaailm.ee" ;;
                 *) site="system" ;;
               esac
 
@@ -176,7 +180,7 @@ jobs:
 
           # Arvuta statistika ja näita
           total_site_errors=0
-          for site in "nirgu.ee" "birdbusters.eu" "sharpy.ee" "linnupeletaja.ee" "lasteaiapildid.ee" "athliit.ee"; do
+          for site in "nirgu.ee" "birdbusters.eu" "sharpy.ee" "linnupeletaja.ee" "lasteaiapildid.ee" "athliit.ee" "24-7fitness.ee" "pillimaailm.ee"; do
             count=$(grep -c "^$site|" /tmp/errors_detailed.txt 2>/dev/null || echo "0")
             total_site_errors=$((total_site_errors + count))
           done
@@ -184,7 +188,7 @@ jobs:
           if [ "$total_site_errors" -gt 0 ]; then
             echo "<h2>⚠️ Probleemid nädalal</h2>" >> summary.html
 
-            for site in "nirgu.ee" "birdbusters.eu" "sharpy.ee" "linnupeletaja.ee" "lasteaiapildid.ee" "athliit.ee"; do
+            for site in "nirgu.ee" "birdbusters.eu" "sharpy.ee" "linnupeletaja.ee" "lasteaiapildid.ee" "athliit.ee" "24-7fitness.ee" "pillimaailm.ee"; do
               site_errors=$(grep "^$site|" /tmp/errors_detailed.txt 2>/dev/null || true)
               [ -z "$site_errors" ] && continue
 
