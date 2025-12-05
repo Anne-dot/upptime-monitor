@@ -1,0 +1,142 @@
+name: Uptime Check v2
+
+on:
+  # schedule:
+  #   - cron: "*/30 * * * *"  # Aktiveeri parast testimist
+  workflow_dispatch:  # Ainult kasitsi esialgu
+
+env:
+  TEST_MODE: "false"
+  TECH_EMAIL: "ruusmann@gmail.com"
+
+jobs:
+  check-all:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all sites and send alerts
+        env:
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+        run: |
+          sites='[
+            {"url":"https://nirgu.ee","name":"nirgu.ee","emails":"info@nirgu.ee","is_php":true,"check_ssl":true},
+            {"url":"https://birdbusters.eu","name":"birdbusters.eu","emails":"info@birdbusters.eu","is_php":true,"check_ssl":true},
+            {"url":"https://sharpy.ee","name":"sharpy.ee","emails":"info@sharpy.ee","is_php":true,"check_ssl":true},
+            {"url":"http://linnupeletaja.ee","name":"linnupeletaja.ee","emails":"info@nirgu.ee","is_php":true,"check_ssl":false},
+            {"url":"https://lasteaiapildid.ee","name":"lasteaiapildid.ee","emails":"info@lasteaiapildid.ee","is_php":false,"check_ssl":true},
+            {"url":"https://athliit.ee","name":"athliit.ee","emails":"anne.ruusmann@athliit.ee,info@athliit.ee,kerstenkorge@athliit.ee","is_php":true,"check_ssl":true}
+          ]'
+
+          send_email() {
+            local to="$1"
+            local subject="$2"
+            local body="$3"
+            if [ "$TEST_MODE" = "true" ]; then
+              to="$TECH_EMAIL"
+            else
+              to="$to,$TECH_EMAIL"
+            fi
+            echo "Saadan meili: $to"
+            curl -s --url "smtps://smtp.gmail.com:465" \
+              --ssl-reqd \
+              --mail-from "$MAIL_USERNAME" \
+              --mail-rcpt-allowfails \
+              $(echo "$to" | tr ',' '\n' | sed 's/^/--mail-rcpt /' | tr '\n' ' ') \
+              --user "$MAIL_USERNAME:$MAIL_PASSWORD" \
+              -T - <<MAILEOF
+From: Veebilehtede seire <$MAIL_USERNAME>
+To: $to
+Subject: $subject
+Content-Type: text/plain; charset=UTF-8
+
+$body
+MAILEOF
+          }
+
+          echo "========================================"
+          echo "Uptime Check v2 - $(date)"
+          echo "========================================"
+
+          echo "$sites" | jq -c '.[]' | while read -r site; do
+            url=$(echo "$site" | jq -r '.url')
+            name=$(echo "$site" | jq -r '.name')
+            emails=$(echo "$site" | jq -r '.emails')
+            is_php=$(echo "$site" | jq -r '.is_php')
+            check_ssl=$(echo "$site" | jq -r '.check_ssl')
+
+            echo ""
+            echo "--- $name ---"
+            error_reason=""
+            error_detail=""
+
+            if ! response=$(curl -sL --max-time 30 "$url" 2>&1); then
+              error_reason="Leht ei laadinud 30 sekundi jooksul"
+              error_detail="Timeout or connection failed"
+              echo "FAIL $name: Timeout"
+            else
+              echo "OK $name: Leht laadis"
+              status=$(curl -sL -o /dev/null -w "%{http_code}" --max-time 30 "$url")
+              if [ "$status" != "200" ]; then
+                error_reason="Server tagastas vea"
+                error_detail="HTTP status: $status"
+                echo "FAIL $name: HTTP $status"
+              else
+                echo "OK $name: HTTP $status"
+                if [ "$is_php" = "true" ]; then
+                  if echo "$response" | grep -qiE "(Fatal error|Parse error|Warning:|Exception)"; then
+                    error_reason="PHP viga lehel"
+                    error_detail="Fatal error, Parse error voi Warning leitud"
+                    echo "FAIL $name: PHP viga"
+                  else
+                    echo "OK $name: PHP OK"
+                  fi
+                fi
+                if [ -z "$error_reason" ]; then
+                  response_size=${#response}
+                  if [ $response_size -lt 500 ]; then
+                    error_reason="Leht on tuhi voi liiga luhike"
+                    error_detail="Response size: $response_size bytes"
+                    echo "FAIL $name: Liiga luhike ($response_size bytes)"
+                  else
+                    echo "OK $name: Suurus OK ($response_size bytes)"
+                  fi
+                fi
+              fi
+            fi
+
+            if [ -n "$error_reason" ]; then
+              send_email "$emails" "[ALERT] $name probleem" "$name ei toota!
+
+Pohjus: $error_reason
+Tehniline info: $error_detail
+
+Kontrolli lehte: $url"
+            fi
+
+            if [ "$check_ssl" = "true" ] && [ -z "$error_reason" ]; then
+              host=$(echo "$url" | sed 's|https://||' | sed 's|/.*||')
+              expiry=$(echo | openssl s_client -connect "$host:443" -servername "$host" 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
+              if [ -n "$expiry" ]; then
+                expiry_epoch=$(date -d "$expiry" +%s 2>/dev/null || echo "0")
+                now_epoch=$(date +%s)
+                if [ "$expiry_epoch" != "0" ]; then
+                  days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
+                  if [ $days_left -le 7 ]; then
+                    echo "FAIL $name: SSL aegub $days_left paeva parast!"
+                    send_email "$emails" "[ALERT] $name SSL aegub!" "$name SSL sertifikaat aegub varsti!
+
+Paevi jaanud: $days_left
+
+Uuenda sertifikaati kohe!"
+                  else
+                    echo "OK $name: SSL OK ($days_left paeva)"
+                  fi
+                fi
+              fi
+            fi
+          done
+
+          echo ""
+          echo "========================================"
+          echo "Kontroll lopetatud"
+          echo "========================================"
