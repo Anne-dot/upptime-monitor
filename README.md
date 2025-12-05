@@ -4,14 +4,14 @@ Veebilehtede seire GitHub Actions abil.
 
 ## Monitooritavad saidid
 
-| Sait | Tüüp | Kontaktid |
-|------|------|-----------|
-| nirgu.ee | PHP | info@nirgu.ee |
-| birdbusters.eu | PHP | info@birdbusters.eu |
-| sharpy.ee | PHP | info@sharpy.ee |
-| linnupeletaja.ee | PHP | info@nirgu.ee |
-| lasteaiapildid.ee | Staatiline | info@lasteaiapildid.ee |
-| athliit.ee | PHP | anne.ruusmann@athliit.ee, info@athliit.ee |
+| Sait | Tüüp |
+|------|------|
+| nirgu.ee | PHP |
+| birdbusters.eu | PHP |
+| sharpy.ee | PHP |
+| linnupeletaja.ee | PHP |
+| lasteaiapildid.ee | Staatiline |
+| athliit.ee | PHP |
 
 ## Kontrollid
 
@@ -36,6 +36,10 @@ Iga saidi puhul kontrollitakse:
 - **Struktuur:** 1 job, järjestikused kontrollid
 - **Kasutus:** ~1 minut per run
 - **Sobib:** PRIVATE repole (säästab minuteid)
+
+### Weekly Summary (`weekly-summary.yml`)
+- **Sagedus:** esmaspäev 8:00 Eesti aeg
+- **Sisu:** saitide kiirused, SSL staatused, nädala intsidendid
 
 ## Seadistamine
 
@@ -69,7 +73,3 @@ GitHub Free annab 2000 min/kuu privaatsetele repodele.
 |----------|---------|-----------|----------|--------|
 | v1 (5 min) | 11 | 288 | 3168 | ~15h ❌ |
 | v2 (30 min) | 1 | 48 | 48 | ~41 päeva ✅ |
-
----
-
-*Loodud Claude Code abil*
