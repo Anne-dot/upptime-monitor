@@ -9,7 +9,7 @@ on:
 # SEADISTUS
 # ============================================
 env:
-  TEST_MODE: "false"
+  TEST_MODE: "true"  # DEBUG: ainult TECH_EMAIL saab meile
   TECH_EMAIL: "ruusmann@gmail.com"
 
 jobs:
@@ -139,7 +139,7 @@ jobs:
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "⚠️ ${{ matrix.site.name }} probleem"
+          subject: "⚠️ [v1] ${{ matrix.site.name }} probleem"
           to: ${{ env.TEST_MODE == 'true' && env.TECH_EMAIL || format('{0},{1}', matrix.site.emails, env.TECH_EMAIL) }}
           from: Veebilehtede seire
           body: |
@@ -206,7 +206,7 @@ jobs:
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "⚠️ ${{ matrix.site.host }} SSL sertifikaat aegub!"
+          subject: "⚠️ [v1] ${{ matrix.site.host }} SSL sertifikaat aegub!"
           to: ${{ env.TEST_MODE == 'true' && env.TECH_EMAIL || format('{0},{1}', matrix.site.emails, env.TECH_EMAIL) }}
           from: Veebilehtede seire
           body: |

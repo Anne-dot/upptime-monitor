@@ -14,8 +14,8 @@ name: Uptime Check v2 (Single Job)
 # ============================================
 
 on:
-  # schedule:
-  #   - cron: "*/30 * * * *"  # Aktiveeri kui repo on PRIVATE
+  schedule:
+    - cron: "*/30 * * * *"
   workflow_dispatch:
 
 # ============================================
@@ -145,7 +145,7 @@ jobs:
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "⚠️ nirgu.ee probleem"
+          subject: "⚠️ [v2] nirgu.ee probleem"
           to: ${{ env.TEST_MODE == 'true' && env.TECH_EMAIL || format('info@nirgu.ee,{0}', env.TECH_EMAIL) }}
           from: Veebilehtede seire
           body: |
@@ -163,7 +163,7 @@ jobs:
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "⚠️ birdbusters.eu probleem"
+          subject: "⚠️ [v2] birdbusters.eu probleem"
           to: ${{ env.TEST_MODE == 'true' && env.TECH_EMAIL || format('info@birdbusters.eu,{0}', env.TECH_EMAIL) }}
           from: Veebilehtede seire
           body: |
@@ -181,7 +181,7 @@ jobs:
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "⚠️ sharpy.ee probleem"
+          subject: "⚠️ [v2] sharpy.ee probleem"
           to: ${{ env.TEST_MODE == 'true' && env.TECH_EMAIL || format('info@sharpy.ee,{0}', env.TECH_EMAIL) }}
           from: Veebilehtede seire
           body: |
@@ -199,7 +199,7 @@ jobs:
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "⚠️ linnupeletaja.ee probleem"
+          subject: "⚠️ [v2] linnupeletaja.ee probleem"
           to: ${{ env.TEST_MODE == 'true' && env.TECH_EMAIL || format('info@nirgu.ee,{0}', env.TECH_EMAIL) }}
           from: Veebilehtede seire
           body: |
@@ -217,7 +217,7 @@ jobs:
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "⚠️ lasteaiapildid.ee probleem"
+          subject: "⚠️ [v2] lasteaiapildid.ee probleem"
           to: ${{ env.TEST_MODE == 'true' && env.TECH_EMAIL || format('info@lasteaiapildid.ee,{0}', env.TECH_EMAIL) }}
           from: Veebilehtede seire
           body: |
@@ -235,7 +235,7 @@ jobs:
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "⚠️ athliit.ee probleem"
+          subject: "⚠️ [v2] athliit.ee probleem"
           to: ${{ env.TEST_MODE == 'true' && env.TECH_EMAIL || format('anne.ruusmann@athliit.ee,info@athliit.ee,kerstenkorge@athliit.ee,{0}', env.TECH_EMAIL) }}
           from: Veebilehtede seire
           body: |
