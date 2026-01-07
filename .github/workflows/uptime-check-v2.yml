@@ -33,10 +33,35 @@ jobs:
           echo "Uptime Check v2 - $(date)"
           echo "========================================"
 
+          # Error messages - single source of truth for all error texts
+          ERR_NO_CONFIG="CRITICAL: sites.json not found!"
+          ERR_INVALID_JSON="CRITICAL: sites.json is not valid JSON!"
+          ERR_EMPTY_CONFIG="WARNING: sites.json is empty, nothing to check"
+          ERR_MISSING_URL="WARNING: URL missing, skipping site"
+          ERR_TIMEOUT="Timeout (>30s) - site slow"
+          ERR_DNS="DNS error - host not found"
+          ERR_CONNECTION="Connection failed - server down?"
+          ERR_PHP="PHP error on page"
+
+          # Fail fast if config is broken - no point continuing with bad data
+          if [ ! -f sites.json ]; then
+            echo "$ERR_NO_CONFIG"
+            exit 1
+          fi
+          if ! jq empty sites.json 2>/dev/null; then
+            echo "$ERR_INVALID_JSON"
+            exit 1
+          fi
+
           ERRORS="[]"
 
-          # Loe sites.json
           SITE_COUNT=$(jq length sites.json)
+
+          if [ "$SITE_COUNT" -eq 0 ]; then
+            echo "$ERR_EMPTY_CONFIG"
+            echo "errors=[]" >> $GITHUB_OUTPUT
+            exit 0
+          fi
 
           for i in $(seq 0 $((SITE_COUNT - 1))); do
             name=$(jq -r ".[$i].name" sites.json)
@@ -48,45 +73,51 @@ jobs:
             echo ""
             echo "--- $name ---"
 
+            # Skip sites with missing or invalid URL
+            if [ "$url" = "null" ] || [ -z "$url" ]; then
+              echo "$ERR_MISSING_URL"
+              continue
+            fi
+
             reason=""
 
-            # ========== RETRY LOOGIKA (3 katset) ==========
+            # Retry 3 times with 10s delay before alerting
             for attempt in 1 2 3; do
               reason=""
 
-              # 1. Lehe laadimine + HTTP staatus + aeg UHES paringus
+              # Single curl request: content + HTTP status + response time
               set +e
               full_response=$(curl -sL -w "\n%{http_code}\n%{time_total}" --max-time 30 "$url" 2>&1)
               curl_exit=$?
               set -e
 
-              # Eralda: sisu, HTTP staatus, response time
+              # Parse response: content, HTTP status, response time
               time_total=$(echo "$full_response" | tail -1)
               status=$(echo "$full_response" | tail -2 | head -1)
               response=$(echo "$full_response" | sed -n '1,/^[0-9]\{3\}$/{ /^[0-9]\{3\}$/d; p; }')
 
-              # Curl exit koodide eristamine
+              # Different curl exit codes mean different problems
               if [ $curl_exit -eq 28 ]; then
-                reason="Timeout (>30s) - leht aeglane"
+                reason="$ERR_TIMEOUT"
               elif [ $curl_exit -eq 6 ]; then
-                reason="DNS viga - host not found"
+                reason="$ERR_DNS"
               elif [ $curl_exit -eq 7 ]; then
-                reason="Uhendus ebaonnestus - server maas?"
+                reason="$ERR_CONNECTION"
               elif [ $curl_exit -ne 0 ]; then
-                reason="Curl viga (exit $curl_exit)"
+                reason="Curl error (exit $curl_exit)"
               elif [ "$status" != "200" ]; then
-                reason="HTTP viga: $status"
+                reason="HTTP error: $status"
               else
                 echo "OK: HTTP $status (${time_total}s)"
 
-                # 2. PHP vead (taipsem regex)
+                # Check for PHP errors in response body
                 if [ "$is_php" = "true" ]; then
                   if echo "$response" | grep -qE "(<b>Fatal error</b>|<b>Parse error</b>|<b>Warning</b>)"; then
-                    reason="PHP viga lehel"
+                    reason="$ERR_PHP"
                   fi
                 fi
 
-                # 3. SSL kontroll
+                # Check SSL certificate expiry
                 if [ -z "$reason" ] && [ "$check_ssl" = "true" ]; then
                   host=$(echo "$url" | sed 's|https://||' | sed 's|/.*||')
                   set +e
@@ -98,33 +129,34 @@ jobs:
                     if [ "$expiry_epoch" != "0" ]; then
                       days_left=$(( (expiry_epoch - now_epoch) / 86400 ))
                       if [ $days_left -le 7 ]; then
-                        reason="SSL sertifikaat aegub $days_left paeva parast"
+                        reason="SSL certificate expires in $days_left days"
                       fi
                     fi
                   fi
                 fi
               fi
 
-              # Kui OK, lopeta retry
+              # Success - no need to retry
               if [ -z "$reason" ]; then
-                echo "OK (katse $attempt)"
+                echo "OK (attempt $attempt)"
                 break
               fi
 
-              # Kui viga ja pole viimane katse, oota
+              # Failed but not last attempt - wait and retry
               if [ $attempt -lt 3 ]; then
-                echo "Katse $attempt ebaonnestus: $reason - ootan 10s..."
+                echo "Attempt $attempt failed: $reason - waiting 10s..."
                 sleep 10
               fi
             done
 
-            # Lopptulemus
+            # Final result after all retries
             if [ -n "$reason" ]; then
-              echo "VIGA (parast 3 katset): $reason"
-              # Lisa error JSON massiivi
-              ERRORS=$(echo "$ERRORS" | jq -c ". + [{\"name\": \"$name\", \"url\": \"$url\", \"reason\": \"$reason\", \"emails\": \"$emails\"}]")
+              echo "FAILED (after 3 attempts): $reason"
+              # Escape quotes in reason to avoid breaking JSON
+              reason_escaped=$(echo "$reason" | sed 's/"/\\"/g')
+              ERRORS=$(echo "$ERRORS" | jq -c ". + [{\"name\": \"$name\", \"url\": \"$url\", \"reason\": \"$reason_escaped\", \"emails\": \"$emails\"}]")
             else
-              echo "KOIK OK"
+              echo "ALL OK"
             fi
           done
 
@@ -135,18 +167,18 @@ jobs:
 
           echo "errors=$ERRORS" >> $GITHUB_OUTPUT
 
-  # ============================================
-  # JOB 2: Saada teavitused (dunaamiline matrix)
-  # ============================================
+  # Send alert emails - one per failed site
   notify:
     needs: check
     if: needs.check.outputs.errors != '[]'
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false  # One failed email should not stop others
       matrix:
         error: ${{ fromJSON(needs.check.outputs.errors) }}
     steps:
-      - name: Teavitus - ${{ matrix.error.name }}
+      - name: Send alert - ${{ matrix.error.name }}
+        continue-on-error: true  # Log failure but don't fail the job
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
