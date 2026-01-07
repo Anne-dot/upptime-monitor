@@ -38,7 +38,6 @@ jobs:
           ERR_INVALID_JSON="CRITICAL: sites.json is not valid JSON!"
           ERR_EMPTY_CONFIG="WARNING: sites.json is empty, nothing to check"
           ERR_MISSING_URL="WARNING: URL missing, skipping site"
-          ERR_TIMEOUT="Timeout (>30s) - site slow"
           ERR_DNS="DNS error - host not found"
           ERR_CONNECTION="Connection failed - server down?"
           ERR_PHP="PHP error on page"
@@ -81,13 +80,20 @@ jobs:
 
             reason=""
 
-            # Retry 3 times with 10s delay before alerting
+            # Retry 3 times with increasing timeout (30s, 60s, 90s)
             for attempt in 1 2 3; do
               reason=""
 
+              # Increase timeout with each attempt
+              case $attempt in
+                1) timeout=30 ;;
+                2) timeout=60 ;;
+                3) timeout=90 ;;
+              esac
+
               # Single curl request: content + HTTP status + response time
               set +e
-              full_response=$(curl -sL -w "\n%{http_code}\n%{time_total}" --max-time 30 "$url" 2>&1)
+              full_response=$(curl -sL -w "\n%{http_code}\n%{time_total}" --max-time $timeout "$url" 2>&1)
               curl_exit=$?
               set -e
 
@@ -98,7 +104,7 @@ jobs:
 
               # Different curl exit codes mean different problems
               if [ $curl_exit -eq 28 ]; then
-                reason="$ERR_TIMEOUT"
+                reason="Timeout (>${timeout}s) - site slow"
               elif [ $curl_exit -eq 6 ]; then
                 reason="$ERR_DNS"
               elif [ $curl_exit -eq 7 ]; then
