@@ -40,7 +40,7 @@ jobs:
           ERR_MISSING_URL="WARNING: URL missing, skipping site"
           ERR_DNS="DNS error - host not found"
           ERR_CONNECTION="Connection failed - server down?"
-          ERR_PHP="PHP error on page"
+          ERR_PHP="PHP error visible - server misconfigured (display_errors=on)"
 
           # Fail fast if config is broken - no point continuing with bad data
           if [ ! -f sites.json ]; then
