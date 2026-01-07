@@ -40,19 +40,5 @@
     "ssl": true,
     "is_php": true,
     "emails": "anne.ruusmann@athliit.ee,info@athliit.ee,kerstenkorge@athliit.ee"
-  },
-  {
-    "name": "24-7fitness.ee",
-    "url": "https://24-7fitness.ee",
-    "ssl": true,
-    "is_php": true,
-    "emails": ""
-  },
-  {
-    "name": "pillimaailm.ee",
-    "url": "http://www.pillimaailm.ee",
-    "ssl": false,
-    "is_php": true,
-    "emails": ""
   }
 ]
